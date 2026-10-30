@@ -1,4 +1,4 @@
-name: Python tests
+name: Stock alert tests
 
 on:
   push:
@@ -22,3 +22,11 @@ jobs:
           cache: pip
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
+  apps-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/apps_script_*.test.cjs
