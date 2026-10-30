@@ -4,6 +4,7 @@ import os
 import re
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -73,6 +74,8 @@ class Service:
         self.check_lock = threading.Lock()
         self.last_check = None
         self.scheduler_running = False
+        self.lookup_lock = threading.Lock()
+        self.lookup_cache = {}
         with self.db() as db:
             db.executescript("""
             CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -184,6 +187,22 @@ class Service:
         with self.db() as db:
             alerts = [dict(r) for r in db.execute("SELECT * FROM alerts ORDER BY id DESC LIMIT 50")]
         return dict(rules=self.rules(), settings=self.settings(public=True), recent_alerts=alerts)
+
+    def lookup(self, market, ticker):
+        normalized = validate_rule(dict(market=market, ticker=ticker, target_price="1"))
+        key = (normalized["market"], normalized["ticker"])
+        now = time.monotonic()
+        with self.lookup_lock:
+            cached = self.lookup_cache.get(key)
+            if cached and now - cached[0] < 3600:
+                return dict(cached[1])
+        result = self.provider.lookup(*key)
+        with self.lookup_lock:
+            self.lookup_cache[key] = (time.monotonic(), dict(result))
+            if len(self.lookup_cache) > 128:
+                oldest = min(self.lookup_cache, key=lambda item: self.lookup_cache[item][0])
+                self.lookup_cache.pop(oldest)
+        return dict(result)
 
     def save_rule(self, data, rule_id=None):
         with self.check_lock, self.db() as db:

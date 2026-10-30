@@ -4,7 +4,9 @@ import logging
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
+
+from .provider import ProviderError
 
 STATIC = Path(__file__).parent / "static"
 
@@ -66,6 +68,11 @@ def make_server(service, host="127.0.0.1", port=8765):
                 return self.output({"error": "이 프로그램은 localhost 주소에서만 사용할 수 있습니다."}, 403)
             path = urlsplit(self.path).path
             if self.command == "GET":
+                if path == "/api/lookup":
+                    query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                    if set(query) != {"market", "ticker"} or any(len(values) != 1 for values in query.values()):
+                        raise ValueError("시장과 종목 티커를 하나씩 입력하세요.")
+                    return self.output(service.lookup(query["market"][0], query["ticker"][0]))
                 if path == "/api/rules":
                     return self.output(service.snapshot())
                 if path == "/api/status":
@@ -110,6 +117,8 @@ def make_server(service, host="127.0.0.1", port=8765):
                 self.output({"error": "종목을 찾을 수 없습니다."}, 404)
             except (ValueError, UnicodeError) as exc:
                 self.output({"error": str(exc)}, 400)
+            except ProviderError as exc:
+                self.output({"error": str(exc)}, 502)
             except RuntimeError as exc:
                 self.output({"error": str(exc)}, 409)
             except (ConnectionError, TimeoutError):

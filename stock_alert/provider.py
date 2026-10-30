@@ -209,3 +209,15 @@ class NaverProvider:
         return Quote(symbol=symbol, name=str(basic["stockName"]), market=market,
                      currency="KRW" if market == "KR" else "USD", close=close,
                      trade_date=trade_date, source_url=page)
+
+    def lookup(self, market: str, ticker: str) -> dict[str, str]:
+        """Resolve a name using basic information only, independent of market hours."""
+        market = str(market).strip().upper()
+        ticker = str(ticker).strip().upper()
+        if market not in ("KR", "US"):
+            raise ProviderError("시장은 KR 또는 US여야 합니다.")
+        if not re.fullmatch(r"[0-9]{6}" if market == "KR" else r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
+            raise ProviderError("한국은 6자리 종목코드, 미국은 영문 티커를 입력하세요.")
+        symbol, basic = self._basic(market, ticker)
+        return dict(market=market, ticker=ticker, symbol=symbol,
+                    name=str(basic["stockName"]), currency="KRW" if market == "KR" else "USD")

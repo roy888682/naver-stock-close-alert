@@ -4,6 +4,12 @@ const $ = (id) => document.getElementById(id);
 let snapshot = { rules: [], settings: {}, recent_alerts: [] };
 let checking = false;
 let noticeTimer;
+let lookupTimer;
+let lookupController = null;
+let lookupRequestId = 0;
+let lookupRequestKey = "";
+let lastLookup = null;
+let autoFilledName = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -55,6 +61,103 @@ function dateTime(value) {
 
 function market() { return document.querySelector('input[name="market"]:checked').value; }
 
+function tickerIdentity() {
+  const identity = { market: market(), ticker: $("ticker").value.trim().toUpperCase() };
+  identity.key = `${identity.market}:${identity.ticker}`;
+  identity.valid = identity.market === "KR" ? /^[0-9]{6}$/.test(identity.ticker) : /^[A-Z][A-Z0-9.\-]{0,19}$/.test(identity.ticker);
+  return identity;
+}
+
+function lookupStatus(message = "", state = "") {
+  $("ticker-lookup-status").textContent = message;
+  $("ticker-lookup-status").className = `lookup-status ${state}`;
+  $("ticker-lookup-status").hidden = !message;
+}
+
+function cancelLookup() {
+  clearTimeout(lookupTimer);
+  lookupTimer = undefined;
+  lookupRequestId += 1;
+  if (lookupController) lookupController.abort();
+  lookupController = null;
+  lookupRequestKey = "";
+  $("lookup-ticker").disabled = false;
+  $("lookup-ticker").textContent = "종목명 조회";
+}
+
+function resetLookup(clearAutomatic = false) {
+  cancelLookup();
+  if (clearAutomatic && autoFilledName !== null && $("name").value === autoFilledName) $("name").value = "";
+  autoFilledName = null;
+  lastLookup = null;
+  lookupStatus();
+}
+
+function applyLookup(data, identity) {
+  const name = typeof data.name === "string" ? data.name.trim() : "";
+  if (!name) throw new Error("조회 결과에 종목명이 없습니다.");
+  const currentName = $("name").value;
+  const canFill = !currentName.trim() || (autoFilledName !== null && currentName === autoFilledName);
+  if (canFill) {
+    $("name").value = name;
+    autoFilledName = name;
+  }
+  const symbol = typeof data.symbol === "string" && data.symbol ? data.symbol : identity.ticker;
+  lookupStatus(`${name} · ${symbol} 확인${canFill ? "" : " · 입력한 종목명 유지"}`, "success");
+}
+
+async function lookupTicker() {
+  clearTimeout(lookupTimer);
+  lookupTimer = undefined;
+  const identity = tickerIdentity();
+  if (!identity.valid) {
+    cancelLookup();
+    lookupStatus(identity.market === "KR" ? "한국 종목의 6자리 코드를 입력하세요." : "미국 티커를 확인하세요. 예: AAPL, MSFT, BRK.B", "error");
+    return;
+  }
+  $("ticker").value = identity.ticker;
+  if (lastLookup && lastLookup.key === identity.key) {
+    applyLookup(lastLookup.data, identity);
+    return;
+  }
+  if (lookupController && lookupRequestKey === identity.key) return;
+  cancelLookup();
+  const requestId = lookupRequestId;
+  lookupController = new AbortController();
+  lookupRequestKey = identity.key;
+  $("lookup-ticker").disabled = true;
+  $("lookup-ticker").textContent = "조회 중…";
+  lookupStatus("네이버증권에서 종목명을 확인하고 있습니다…", "loading");
+  try {
+    const data = await api(`/api/lookup?market=${encodeURIComponent(identity.market)}&ticker=${encodeURIComponent(identity.ticker)}`, { signal: lookupController.signal });
+    if (requestId !== lookupRequestId || tickerIdentity().key !== identity.key) return;
+    applyLookup(data, identity);
+    lastLookup = { key: identity.key, data };
+  } catch (error) {
+    if (requestId !== lookupRequestId || tickerIdentity().key !== identity.key || error.name === "AbortError") return;
+    lookupStatus(`종목명을 확인하지 못했습니다. 시장과 티커를 확인하거나 종목명을 직접 입력하세요. ${error.message}`, "error");
+  } finally {
+    if (requestId === lookupRequestId) {
+      lookupController = null;
+      lookupRequestKey = "";
+      $("lookup-ticker").disabled = false;
+      $("lookup-ticker").textContent = "종목명 조회";
+    }
+  }
+}
+
+function scheduleLookup() {
+  resetLookup(true);
+  const identity = tickerIdentity();
+  if (!identity.ticker) return;
+  if (!identity.valid) {
+    lookupStatus(identity.market === "KR" ? "6자리 코드를 입력하면 종목명을 자동으로 조회합니다." : "영문 티커를 입력하세요. 예: AAPL, MSFT, BRK.B");
+    return;
+  }
+  lookupStatus("잠시 후 종목명을 자동으로 조회합니다.");
+  lookupTimer = setTimeout(lookupTicker, 700);
+}
+
 function updateMarket() {
   const kr = market() === "KR";
   $("ticker").placeholder = kr ? "005930" : "AAPL";
@@ -77,6 +180,7 @@ function updateRange() {
 }
 
 function resetEditor() {
+  resetLookup();
   $("rule-form").reset();
   $("rule-id").value = "";
   $("editor-title").textContent = "새 알림 등록";
@@ -86,6 +190,7 @@ function resetEditor() {
 }
 
 function editRule(rule) {
+  resetLookup();
   $("rule-id").value = rule.id;
   document.querySelector(`input[name="market"][value="${rule.market === "US" ? "US" : "KR"}"]`).checked = true;
   $("ticker").value = rule.ticker;
@@ -100,6 +205,7 @@ function editRule(rule) {
   updateMarket();
   $("editor-title").scrollIntoView({ behavior: "smooth", block: "center" });
   $("ticker").focus({ preventScroll: true });
+  scheduleLookup();
 }
 
 function rulePayload(rule) {
@@ -320,7 +426,20 @@ $("test-email").addEventListener("click", async () => {
   finally { button.disabled = false; button.textContent = "테스트 메일 보내기"; }
 });
 
-document.querySelectorAll('input[name="market"]').forEach((input) => input.addEventListener("change", updateMarket));
+document.querySelectorAll('input[name="market"]').forEach((input) => input.addEventListener("change", () => {
+  updateMarket();
+  scheduleLookup();
+}));
+$("ticker").addEventListener("input", scheduleLookup);
+$("ticker").addEventListener("blur", () => { if ($("ticker").value.trim()) lookupTicker(); });
+$("ticker").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    lookupTicker();
+  }
+});
+$("lookup-ticker").addEventListener("click", lookupTicker);
+$("name").addEventListener("input", () => { autoFilledName = null; });
 ["target-price", "lower-pct", "upper-pct"].forEach((id) => $(id).addEventListener("input", updateRange));
 $("cancel-edit").addEventListener("click", resetEditor);
 $("check-only").addEventListener("click", () => check(false));
