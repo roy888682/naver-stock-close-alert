@@ -1,35 +1,33 @@
 # PC를 꺼도 종가 알림을 받는 방법
 
-확인 기준일: **2026-10-30**. 이 저장소는 GitHub Actions와 Google Apps Script 실행 방식을 제공합니다. **매일 오전 7시 확인하려면 [GitHub Actions 설치 안내](GITHUB_ACTIONS.md)**를 따르세요.
+현재 주된 사용 화면은 **[Close Watch 웹사이트](https://close-watch-list.hansharedid.chatgpt.site)**입니다. 같은 사이트 소유자 ChatGPT 계정으로 로그인하고 종목을 등록합니다. 목록은 **1, 2, 3…** 순서로 보이며, 각 항목 오른쪽 **`×`**로 삭제할 수 있습니다.
 
-| 방법 | 자동 확인 시각 | 조건 입력 | 발송 인증 |
+| 방법 | 자동 확인 | 조건 입력 | 발송 인증 |
 | --- | --- | --- | --- |
-| **GitHub Actions** | 한국 시간 매일 오전 7시 예약 | [GitHub 웹 입력 화면](https://github.com/roy888682/naver-stock-close-alert/actions/workflows/manage-alerts.yml)에서 저장 | 이 저장소의 `SMTP_PASSWORD` Secret |
-| **Google Apps Script** | 기본 30분마다 | Google Sheets에서 종목·가격 조건 편집 | 발신 Google 계정에서 최초 권한 승인 |
-| **PC·Docker 버전** | 기본 30분마다 | PC 대시보드 | 대시보드에 앱 비밀번호 저장 |
+| **웹사이트 연결 + GitHub Actions** | 사이트 연결 작업이 한국 시간 오전 7시에 최신 목록 전달 후 실행 | Close Watch 웹사이트 | 기존 GitHub `SMTP_PASSWORD` Secret |
+| **Google Apps Script** | 기본 30분마다 | Google Sheets | 발신 Google 계정의 최초 권한 승인 |
+| **PC·Docker 버전** | 기본 30분마다 | PC 대시보드 | 대시보드의 앱 비밀번호 |
 
-GitHub와 Google 버전은 PC를 꺼도 실행합니다. PC·Docker 버전은 실행 중인 컴퓨터나 서버가 필요합니다. 조건과 발송 기록은 버전 사이에 자동으로 공유되지 않으므로 같은 조건을 여러 방식으로 실행하면 각각 메일을 받을 수 있습니다.
+## 웹사이트에서 관리하고 오전 7시에 확인
 
-## GitHub에서 매일 오전 7시
+사이트에 종목·목표가·위아래 허용 비율을 저장합니다. 사이트에 연결된 클라우드 작업이 오전 7시에 D1 데이터베이스의 최신 조건과 오늘 한국 날짜의 요청을 GitHub에 함께 전달합니다. GitHub Actions는 그 요청을 검증하고 기존 SMTP Secret으로 `royhan88888@gmail.com`에서 `ykhan@dacpole.com`으로 메일을 보냅니다. 기존 GitHub cron은 이 연결 일정으로 대체했습니다.
 
-이미 구현된 [.github/workflows/daily-close-alert.yml](../.github/workflows/daily-close-alert.yml)이 정해진 시각에 Python을 실행합니다. 원하는 종목과 목표가·위아래 비율을 [웹 입력 화면](https://github.com/roy888682/naver-stock-close-alert/actions/workflows/manage-alerts.yml)에 저장하고 발신 Gmail의 앱 비밀번호를 Secret으로 등록하면 됩니다. 프로그램 설치나 별도 GitHub 토큰, JSON 파일 편집·업로드가 필요 없습니다. 현재 감시 목록은 비어 있으므로 본인 조건을 먼저 등록합니다.
+일상적인 종목 관리에 GitHub 입력창이나 JSON 파일 편집은 필요하지 않습니다. 웹사이트에 비밀번호를 다시 입력할 필요도 없습니다. 종목의 추가·수정·삭제는 다음 오전 7시 전달부터 반영됩니다. **[사용·설정 안내](GITHUB_ACTIONS.md)**, **[연결 구조와 운영 지침](SITE_BRIDGE.md)**
 
-실행할 때마다 이전 거래일과 발송 기록을 `alert-state` 브랜치에서 복원하고 저장하여 휴장일이나 같은 거래일 재실행의 중복 발송을 막습니다. **공개 저장소의 종목·목표가와 상태 브랜치 기록은 공개**됩니다. 비밀번호는 Actions Secret에서 전달하며 상태 DB에 저장하지 않습니다.
+조회 실패·누락·잘림을 빈 목록으로 처리하지 않습니다. 최신 목록 전달이 실패하면 과거 저장소 조건으로 대신 예약 발송하지 않습니다. 사이트 연결 작업과 Actions의 최근 성공 기록을 함께 확인합니다. 실제 시작 시각에는 서비스 사정에 따른 지연이 생길 수 있습니다.
 
-공개 저장소의 표준 GitHub 호스팅 실행기는 무료입니다. 비공개 저장소를 사용하면 계정의 포함 컴퓨팅 사용량과 추가 과금 조건이 적용됩니다. [GitHub Actions 과금 안내](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+이전 발송 기록은 `alert-state` 브랜치에 보존하며 휴장일 또는 같은 거래일 재실행의 중복 발송을 막습니다. 접수 여부가 불명확한 `pending`·`uncertain` 기록은 자동 재발송하지 않습니다. 실패·취소 시에는 실행 단계와 보낸 편지함을 확인합니다.
 
-오전 7시는 예약 시각이며 실제 시작은 GitHub 혼잡에 따라 지연되거나 누락될 수 있습니다. 공개 저장소에서 60일간 활동이 없으면 예약 워크플로가 자동 중지될 수 있으므로 Actions의 최근 성공 기록을 확인합니다. [GitHub 예약 실행 안내](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
-
-**[설정과 테스트 순서 보기](GITHUB_ACTIONS.md)**
+웹사이트는 소유자 전용입니다. 다만 조건을 공개 GitHub 저장소에 전달한 뒤에는 종목·목표가와 발송 기록을 다른 사람이 읽을 수 있습니다. 비밀번호는 Actions Secret에만 유지하고 사이트나 상태 DB로 복사하지 않습니다.
 
 ## Google Sheets에서 관리하려면
 
 [Google Apps Script 버전](../apps_script/README.md)을 발신 Google 계정에 설치하고 권한 승인 후 `setup`을 실행합니다. 티커를 입력하면 종목명이 조회되며 Google 서버에서 기본 30분마다 확정 종가를 확인합니다. Gmail 앱 비밀번호를 별도로 저장하지 않습니다.
 
-Google 버전은 매일 오전 7시 GitHub 워크플로와 별개입니다. Google 서비스의 메일·실행 시간 할당량이 적용되며 정확한 실행 시각을 보장하지는 않습니다. 현재 한도는 [Google Apps Script 할당량 안내](https://developers.google.com/apps-script/guides/services/quotas)에서 확인합니다.
+Google 버전은 웹사이트 연결 버전과 별개의 조건·기록을 사용합니다. 같은 종목을 양쪽에서 활성화하면 각각 메일을 받을 수 있습니다.
 
 ## PC에서 사용할 때
 
-[Windows·Docker 설치 안내](../README.md#windows에서-시작하기)에 따라 실행합니다. 대시보드에서 종목과 메일 설정을 저장하며, 기본 자동 확인은 30분마다 동작합니다. 프로그램이 종료되거나 컴퓨터가 절전·종료되면 해당 PC의 확인도 중단됩니다.
+[Windows·Docker 설치 안내](../README.md#windows에서-시작하기)에 따라 실행합니다. 대시보드에서 종목과 메일 설정을 저장하며, 기본 자동 확인은 30분마다 동작합니다. 프로그램이 종료되거나 컴퓨터가 절전·종료되면 해당 PC의 확인도 중단됩니다. 웹사이트 연결 작업은 PC 실행 여부와 관계없이 동작합니다.
 
-네이버의 공개 시세 조회 경로가 변경되면 어느 실행 방식에서든 조회 오류가 발생할 수 있습니다. 오류가 난 실행의 로그를 확인하고 티커나 연결 문제를 해결한 뒤 다시 확인합니다.
+네이버의 공개 시세 조회 경로가 변경되면 어느 방식에서든 조회 오류가 발생할 수 있습니다. 오류가 난 실행의 로그를 확인하고 티커나 연결 문제를 해결한 뒤 다시 확인합니다.

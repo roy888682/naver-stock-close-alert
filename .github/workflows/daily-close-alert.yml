@@ -5,12 +5,13 @@ on:
     branches: [main]
     paths:
       - watchlist.json
+      - cloud-run-request.json
       - .github/workflows/daily-close-alert.yml
       - stock_alert/cloud.py
       - scripts/action_state.py
-  schedule:
-    # GitHub cron uses UTC. 22:00 UTC is 07:00 the next day in Korea.
-    - cron: '0 22 * * *'
+      - scripts/site_bridge.py
+  # The linked private Site task supplies fresh conditions at 07:00 KST.
+  # Its atomic watchlist + dated-request commit triggers delivery below.
   workflow_dispatch:
     inputs:
       action:
@@ -31,7 +32,7 @@ on:
 permissions:
   contents: write
 
-# Schedule, manual checks, and retries all share the same durable state.
+# Site requests, manual checks, and retries share the same durable state.
 concurrency:
   group: stock-close-alert-state
   cancel-in-progress: false
@@ -42,26 +43,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Configuration/code pushes validate without emailing; schedules send.
-      ALERT_ACTION: ${{ github.event_name == 'push' && 'check-only' || github.event.inputs.action || 'check' }}
       LOOKUP_MARKET: ${{ github.event.inputs.market || 'KR' }}
       LOOKUP_TICKER: ${{ github.event.inputs.ticker || '005930' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          # A Site request and its conditions must be read from one snapshot.
+          ref: ${{ github.event_name == 'push' && github.sha || github.event.repository.default_branch }}
+          fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
       - run: python -m pip install -r requirements.txt
+      - name: Validate Site request or manual action
+        id: action
+        run: python scripts/site_bridge.py
       - name: Restore durable alert state
         id: restore
-        if: env.ALERT_ACTION == 'check' || env.ALERT_ACTION == 'check-only'
+        if: steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only'
         run: python scripts/action_state.py restore
       - name: Check completed closes or run the selected utility
         id: monitor
         env:
+          ALERT_ACTION: ${{ steps.action.outputs.action }}
           # Existing installations may already use GMAIL_APP_PASSWORD.
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || secrets.GMAIL_APP_PASSWORD }}
         shell: bash
@@ -74,7 +79,7 @@ jobs:
             *) echo "알 수 없는 실행 작업입니다."; exit 1 ;;
           esac
       - name: Save state even after a partial failure
-        if: always() && steps.restore.outcome == 'success' && (env.ALERT_ACTION == 'check' || env.ALERT_ACTION == 'check-only') && steps.monitor.outcome != 'skipped'
+        if: always() && steps.restore.outcome == 'success' && (steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only') && steps.monitor.outcome != 'skipped'
         run: python scripts/action_state.py save
       - name: Explain execution schedule
         if: always()
@@ -82,9 +87,9 @@ jobs:
         run: |
           {
             echo '### 종가 알림'
-            echo '매일 한국 시간 오전 7시 실행 예약입니다. GitHub 혼잡 시 실제 시작은 늦어질 수 있습니다.'
+            echo '웹사이트에 연결된 작업이 한국 시간 오전 7시에 최신 조건을 전달합니다. 실제 시작은 늦어질 수 있습니다.'
             echo '발신: royhan88888@gmail.com / 수신: ykhan@dacpole.com'
-            echo '종목·목표가: main 브랜치의 watchlist.json / 발송 기록: alert-state 브랜치'
+            echo '종목·목표가는 웹사이트에서 관리합니다. 발송 기록은 alert-state 브랜치에 보관합니다.'
             echo '메일 발송에는 저장소 Secret SMTP_PASSWORD(또는 GMAIL_APP_PASSWORD)가 필요합니다.'
             echo '세부 결과와 오류는 위 실행 단계의 로그를 확인하세요.'
           } >> "$GITHUB_STEP_SUMMARY"
