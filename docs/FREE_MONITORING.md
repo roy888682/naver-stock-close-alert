@@ -4,7 +4,7 @@
 
 | 방법 | 자동 확인 시각 | 조건 입력 | 발송 인증 |
 | --- | --- | --- | --- |
-| **GitHub Actions** | 한국 시간 매일 오전 7시 예약 | PC 대시보드에서 JSON 내보내기 후 업로드, 또는 `watchlist.json` 직접 편집 | 이 저장소의 `SMTP_PASSWORD` Secret |
+| **GitHub Actions** | 한국 시간 매일 오전 7시 예약 | [GitHub 웹 입력 화면](https://github.com/roy888682/naver-stock-close-alert/actions/workflows/manage-alerts.yml)에서 저장 | 이 저장소의 `SMTP_PASSWORD` Secret |
 | **Google Apps Script** | 기본 30분마다 | Google Sheets에서 종목·가격 조건 편집 | 발신 Google 계정에서 최초 권한 승인 |
 | **PC·Docker 버전** | 기본 30분마다 | PC 대시보드 | 대시보드에 앱 비밀번호 저장 |
 
@@ -12,7 +12,7 @@ GitHub와 Google 버전은 PC를 꺼도 실행합니다. PC·Docker 버전은 �
 
 ## GitHub에서 매일 오전 7시
 
-이미 구현된 [.github/workflows/daily-close-alert.yml](../.github/workflows/daily-close-alert.yml)이 정해진 시각에 Python을 실행합니다. 원하는 종목과 가격을 [watchlist.json](../watchlist.json)에 등록하고 발신 Gmail의 앱 비밀번호를 Secret으로 저장하면 됩니다. 실제 설정 파일은 비어 있으므로 본인 조건을 먼저 등록합니다.
+이미 구현된 [.github/workflows/daily-close-alert.yml](../.github/workflows/daily-close-alert.yml)이 정해진 시각에 Python을 실행합니다. 원하는 종목과 목표가·위아래 비율을 [웹 입력 화면](https://github.com/roy888682/naver-stock-close-alert/actions/workflows/manage-alerts.yml)에 저장하고 발신 Gmail의 앱 비밀번호를 Secret으로 등록하면 됩니다. 프로그램 설치나 별도 GitHub 토큰, JSON 파일 편집·업로드가 필요 없습니다. 현재 감시 목록은 비어 있으므로 본인 조건을 먼저 등록합니다.
 
 실행할 때마다 이전 거래일과 발송 기록을 `alert-state` 브랜치에서 복원하고 저장하여 휴장일이나 같은 거래일 재실행의 중복 발송을 막습니다. **공개 저장소의 종목·목표가와 상태 브랜치 기록은 공개**됩니다. 비밀번호는 Actions Secret에서 전달하며 상태 DB에 저장하지 않습니다.
 

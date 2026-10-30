@@ -35,6 +35,7 @@ permissions:
 concurrency:
   group: stock-close-alert-state
   cancel-in-progress: false
+  queue: max
 
 jobs:
   monitor:

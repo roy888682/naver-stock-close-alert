@@ -183,7 +183,7 @@ function resetEditor() {
   resetLookup();
   $("rule-form").reset();
   $("rule-id").value = "";
-  $("editor-title").textContent = "새 알림 등록";
+  $("editor-title").textContent = "이 PC에 알림 등록";
   $("save-rule").replaceChildren(document.createTextNode("알림 등록하기 "), el("span", "", "＋"));
   $("cancel-edit").hidden = true;
   updateMarket();
@@ -444,23 +444,6 @@ $("name").addEventListener("input", () => { autoFilledName = null; });
 $("cancel-edit").addEventListener("click", resetEditor);
 $("check-only").addEventListener("click", () => check(false));
 $("check-send").addEventListener("click", () => check(true));
-$("export-cloud").addEventListener("click", async () => {
-  const button = $("export-cloud");
-  button.disabled = true;
-  try {
-    const config = await api("/api/cloud-config");
-    const url = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2) + "\n"], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "watchlist.json";
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    announce("watchlist.json을 내보냈습니다. GitHub 저장소에 반영하면 다음 자동 확인부터 적용됩니다. 종목을 수정할 때 기존 id를 유지하세요.", "success", true);
-  } catch (error) { announce(error.message, "error", true); }
-  finally { button.disabled = false; }
-});
 updateMarket();
 refresh().catch((error) => announce(`프로그램에 연결하지 못했습니다. ${error.message}`, "error", true));
 refreshStatus();

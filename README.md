@@ -2,18 +2,21 @@
 
 한국·미국 주식의 **확정된 정규장 종가**가 직접 정한 목표가 범위에 들어오면 이메일을 보내는 개인용 프로그램입니다. 브라우저 화면에서 종목과 알림 조건을 관리하며, 기본 수신 주소는 `ykhan@dacpole.com`, 기본 발신 주소는 `royhan88888@gmail.com`입니다.
 
-## 매일 오전 7시, PC를 꺼도 GitHub에서 확인
+## 웹 화면에서 종목 등록하고 매일 오전 7시 확인
 
-**[GitHub Actions 설치 안내](docs/GITHUB_ACTIONS.md)**에 따라 종목 조건과 Gmail 앱 비밀번호를 등록하면 **한국 시간 매일 오전 7시**에 전일의 최신 완료 정규장 종가를 확인합니다. 조건에 맞으면 `royhan88888@gmail.com`에서 `ykhan@dacpole.com`으로 메일을 보냅니다. 공개 저장소의 표준 실행기를 사용하며, 예약 실행에는 지연이나 누락이 생길 수 있습니다. [GitHub 실행 비용](https://docs.github.com/en/billing/concepts/product-billing/github-actions), [예약 실행 조건](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+**[종목 알림 등록·수정 화면 열기](https://github.com/roy888682/naver-stock-close-alert/actions/workflows/manage-alerts.yml)**에서 티커·목표가·위아래 허용 비율을 입력합니다. **프로그램 설치, 별도 GitHub 토큰, JSON 파일 편집·업로드가 필요 없습니다.** 저장소에 쓰기 권한이 있는 GitHub 계정으로 로그인하면 됩니다.
 
-1. 아래 PC 대시보드에서 티커·목표가·위아래 허용 비율을 등록합니다. 조건이 맞는 거래일마다 받고 싶으면 **범위 안이면 거래일마다**를 선택합니다.
-2. **GitHub 설정 JSON 내보내기**로 받은 JSON으로 저장소의 [watchlist.json](watchlist.json)을 교체하고 커밋합니다. [예시 파일](watchlist.example.json)을 보고 GitHub에서 직접 편집해도 됩니다.
-3. 이 저장소의 **Settings → Secrets and variables → Actions**에 발신 Gmail의 앱 비밀번호를 **`SMTP_PASSWORD`**라는 Secret으로 저장합니다.
-4. **Actions → Daily close alert (07:00 KST) → Run workflow**에서 `test-email`, `check-only`, `check` 순으로 실행해 수신과 조건을 확인합니다.
+1. 위 화면의 **Run workflow**를 누르고 브랜치 `main`을 선택합니다.
+2. `operation`은 **`save`**, `market`은 한국 `KR` 또는 미국 `US`로 선택합니다.
+3. `ticker`, `target_price`(목표가), `upper_pct`(위쪽 +%), `lower_pct`(아래쪽 -%)를 입력합니다. 비율은 부호 없이 `5`처럼 입력합니다.
+4. 알림 방식 `mode`는 기본 **`daily`**입니다. 범위에 처음 진입할 때만 받으려면 `entry`를 선택합니다.
+5. 초록색 **Run workflow**를 누릅니다. 실행이 **초록색 체크로 완료되면 저장이 확정**되며, 실행의 **Summary**에서 자동 조회한 종목명과 현재 조건을 확인합니다.
 
-현재 `watchlist.json`은 비어 있으므로 본인의 종목·가격을 등록해야 주가 알림이 시작됩니다. 기본 발신·수신 주소는 설정되어 있으며 비밀번호는 포함되어 있지 않습니다. **공개 저장소에서는 종목·목표가와 상태 브랜치의 발송 기록도 공개**됩니다. 비밀번호는 JSON에 넣지 않고 Actions Secret에만 저장합니다.
+저장한 조건은 다음 **한국 시간 오전 7시** 자동 확인부터 적용됩니다. 발신은 `royhan88888@gmail.com`, 수신은 `ykhan@dacpole.com`입니다. 이미 등록한 **`SMTP_PASSWORD` Secret은 그대로 사용**하며 다시 입력하지 않습니다. 처음 설정한다면 [Gmail 앱 비밀번호 등록 안내](docs/GITHUB_ACTIONS.md#2-gmail-앱-비밀번호-등록)를 따르세요.
 
-오전 7시 자동 실행과 중복 방지 기록 저장은 GitHub에서 수행합니다. PC의 대시보드는 종목 입력과 JSON 내보내기에 사용하며, 로컬 설정 변경은 파일을 다시 업로드해야 반영됩니다. 아래 PC 버전과 Google 버전은 별도의 기본 30분 주기로 동작합니다.
+같은 시장·티커로 `save`하면 기존 조건을 수정합니다. `operation`에서 **`list`**를 실행하면 현재 목록을, **`pause` / `resume` / `delete`**로 각각 일시정지·재개·삭제를 할 수 있습니다. 같은 티커에 조건이 여러 개라면 Summary에서 해당 `rule_id`를 확인해 입력합니다. [화면 입력·수정 방법 자세히 보기](docs/GITHUB_ACTIONS.md)
+
+현재 감시 목록은 비어 있으므로 본인의 종목·가격을 등록해야 주가 알림이 시작됩니다. **공개 저장소에서는 종목·목표가와 발송 기록도 공개**됩니다. 예약 실행에는 지연이나 누락이 생길 수 있습니다. [GitHub 예약 실행 안내](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 
 ## PC를 꺼도 실행하는 Google 버전도 제공
 
@@ -29,7 +32,7 @@
 - 종가 조회만 하거나, 조건을 확인하고 이메일을 발송합니다.
 - `진입 시` 또는 `거래일마다` 알림을 선택하고, 발송 기록을 확인합니다.
 - 이메일 설정과 앱 비밀번호를 화면에서 저장합니다. 종목과 알림 기록도 다음 실행 때 유지됩니다.
-- PC 화면의 종목 조건을 `watchlist.json`으로 내보내고 GitHub에서 매일 오전 7시 자동 확인합니다.
+- GitHub 웹 입력 화면에서 종목 조건을 저장하고 매일 오전 7시에 자동 확인합니다.
 
 예를 들어 목표가가 **100,000원**, 상단이 **+5%**, 하단이 **-5%**이면 **95,000원 이상 105,000원 이하**일 때 조건을 만족합니다. 미국 주식의 목표가는 **미국 달러(USD)**로 입력합니다. 환율을 적용한 원화 가격이 아닙니다.
 
@@ -42,7 +45,7 @@
 5. **이메일 설정**에서 발신 Gmail 계정의 **앱 비밀번호**를 입력하고 **저장**합니다. 기본 발신 주소와 SMTP 설정은 이미 들어 있습니다.
 6. **테스트메일**을 보내 도착을 확인한 뒤 종목과 목표가를 등록합니다.
 
-프로그램 창을 닫으면 **이 PC의 자동 확인**이 종료됩니다. PC 버전의 기본 확인 주기는 30분이며 설정에서 변경할 수 있습니다. 위 GitHub 버전의 조건 파일과 Secret을 설정하면 PC를 꺼도 오전 7시 감시가 실행됩니다. 화면의 자동 확인 간격은 GitHub 예약에 영향을 주지 않습니다.
+프로그램 창을 닫으면 **이 PC의 자동 확인**이 종료됩니다. PC 버전의 기본 확인 주기는 30분이며 설정에서 변경할 수 있습니다. 위 GitHub 웹 입력 화면에서 종목을 등록하고 Secret을 설정하면 PC를 꺼도 오전 7시 감시가 실행됩니다. 화면의 자동 확인 간격은 GitHub 예약에 영향을 주지 않습니다.
 
 ### PC를 꺼도 무료로 감시하려면
 
@@ -151,7 +154,8 @@ Windows 작업 스케줄러에서 **기본 작업 만들기 → 로그온할 때
 - `.env`: 기존 방식과의 호환을 위한 선택 설정입니다. 사용하지 않아도 됩니다. 사용한다면 저장소와 백업 공유 대상에서 제외합니다.
 - `.github/workflows/tests.yml`: GitHub에 올린 코드의 테스트 실행용입니다. 주가 감시나 이메일 발송 스케줄이 아닙니다.
 - `.github/workflows/daily-close-alert.yml`: 한국 시간 매일 오전 7시 실행하는 GitHub 알림 워크플로입니다.
-- `watchlist.json`: GitHub가 읽는 종목·가격 조건입니다. 기본 파일은 빈 목록이며, 예시는 `watchlist.example.json`에 있습니다.
+- `.github/workflows/manage-alerts.yml`: 웹 화면에서 등록·수정·일시정지·재개·삭제·목록 확인을 실행합니다.
+- `watchlist.json`: 웹 입력 화면이 내부적으로 저장하고 오전 7시 실행이 읽는 종목·가격 조건입니다. 직접 편집할 필요가 없으며 개발자용 예시는 `watchlist.example.json`에 있습니다.
 - `alert-state` 브랜치의 `alerts.db`: GitHub 실행 간 조회 상태와 발송 기록을 보관하며 실행 중에는 `data/alerts.db`로 복원합니다. 공개 저장소에서는 이 기록도 공개됩니다. 삭제하면 중복 방지 기록이 사라집니다.
 
 `.gitignore`는 `.env`, `data/`, 가상환경을 제외합니다. GitHub에 올리기 전에도 실제 비밀번호가 소스·스크린샷·로그에 포함되지 않았는지 확인하세요.

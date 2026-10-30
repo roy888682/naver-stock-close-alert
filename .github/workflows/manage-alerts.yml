@@ -1,0 +1,111 @@
+name: 종목 알림 등록·수정 (웹 입력)
+
+on:
+  # A code update checks the read-only list path without changing any rules.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/manage-alerts.yml
+      - stock_alert/watchlist_form.py
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: '작업: save=등록·수정 / pause=일시정지 / resume=재개 / delete=삭제 / list=목록 조회'
+        type: choice
+        required: true
+        options: [save, pause, resume, delete, list]
+        default: save
+      market:
+        description: '시장: KR=한국(원), US=미국(달러)'
+        type: choice
+        options: [KR, US]
+        default: KR
+      ticker:
+        description: '종목 티커 (예: 한국 005930 / 미국 AAPL). 목록 조회는 비워도 됩니다.'
+        type: string
+        default: ''
+      target_price:
+        description: '목표 가격 (한국은 원 / 미국은 달러). 등록·수정할 때만 입력하세요.'
+        type: string
+        default: ''
+      upper_pct:
+        description: '목표가 위 +% (예: 5). 숫자만 입력하세요.'
+        type: string
+        default: '5'
+      lower_pct:
+        description: '목표가 아래 -% (예: 5). 숫자만 입력하세요.'
+        type: string
+        default: '5'
+      mode:
+        description: '알림 방식: daily=범위 안인 거래일마다 / entry=범위 진입 시 1회'
+        type: choice
+        options: [daily, entry]
+        default: daily
+      rule_id:
+        description: '보통 비워 둡니다. 동일 티커에 여러 조건이 있을 때 목록에 나온 알림 ID를 입력하세요.'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+# Changing conditions and the daily check must not overlap.
+concurrency:
+  group: stock-close-alert-state
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  manage:
+    # Only default-branch code may edit the production watchlist.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: 입력 확인 및 종목명 조회
+        id: form
+        # The Python program reads strings from the event JSON. Never insert
+        # user inputs directly into shell code. No SMTP secret is used here.
+        shell: bash
+        run: python -m stock_alert.watchlist_form --event "$GITHUB_EVENT_PATH" --config watchlist.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: 자동 알림에 저장
+        id: persist
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- watchlist.json; then
+            {
+              echo '### 처리 결과'
+              echo '현재 목록을 확인했습니다. 저장할 변경 사항은 없습니다.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            git config --local user.name 'github-actions[bot]'
+            git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -- watchlist.json
+            git commit -m 'Update stock alert settings from the web form'
+            # Never force-push. A concurrent external edit must be preserved.
+            git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
+            {
+              echo '### 저장 완료'
+              echo '입력한 조건을 자동 알림에 반영했습니다. 다음 한국 시간 오전 7시 예약 확인부터 적용됩니다.'
+              echo '이 입력 작업에서는 메일을 발송하지 않습니다.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: 저장 실패 안내
+        if: failure() && steps.form.outcome == 'success' && steps.persist.outcome == 'failure'
+        shell: bash
+        run: |
+          {
+            echo '### 저장 완료를 확인하지 못했습니다'
+            echo '위 입력 확인 결과만으로는 자동 알림에 반영된 것이 아닙니다. Actions 오류와 현재 목록을 확인한 뒤 다시 실행하세요.'
+          } >> "$GITHUB_STEP_SUMMARY"

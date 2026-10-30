@@ -28,9 +28,17 @@
       <div class="metric recipient-metric"><span>수신 이메일</span><strong id="recipient-summary">ykhan@dacpole.com</strong><a href="#settings">이메일 설정 ↗</a></div>
     </section>
 
+    <section class="card settings cloud-management" aria-labelledby="cloud-title">
+      <div class="card-heading"><div><p class="eyebrow">DAILY CLOUD ALERT</p><h2 id="cloud-title">매일 오전 7시 알림 · 웹에서 종목 관리</h2></div><a id="manage-cloud" class="button primary" href="https://github.com/roy888682/naver-stock-close-alert/actions/workflows/manage-alerts.yml" target="_blank" rel="noopener noreferrer">온라인 종목 등록·수정 ↗</a></div>
+      <p class="section-note">위 버튼을 누르고 GitHub의 Run workflow를 열어 시장·티커·목표가·+%·-%를 입력하세요. 저장 작업이 완료되면 다음 오전 7시 확인부터 반영됩니다. 종목명은 저장할 때 자동 조회합니다.</p>
+      <p class="section-note">발신 royhan88888@gmail.com → 수신 ykhan@dacpole.com · 일시정지·재시작·삭제·목록 조회도 같은 화면에서 선택할 수 있습니다. 이 PC를 꺼도 예약 확인은 GitHub에서 실행됩니다.</p>
+      <a class="text-button" href="https://github.com/roy888682/naver-stock-close-alert/blob/main/docs/GITHUB_ACTIONS.md" target="_blank" rel="noopener noreferrer">웹 입력 사용 안내 ↗</a>
+    </section>
+
     <div class="workspace">
       <section class="card rule-editor" aria-labelledby="editor-title">
-        <div class="card-heading"><div><p class="eyebrow">WATCHLIST</p><h2 id="editor-title">새 알림 등록</h2></div><span class="soft-icon" aria-hidden="true">＋</span></div>
+        <div class="card-heading"><div><p class="eyebrow">LOCAL WATCHLIST</p><h2 id="editor-title">이 PC에 알림 등록</h2></div><span class="soft-icon" aria-hidden="true">＋</span></div>
+        <p class="section-note">아래 입력은 PC 실행 중 감시용입니다. 매일 오전 7시 알림은 위의 온라인 종목 관리에서 등록하세요.</p>
         <form id="rule-form">
           <input type="hidden" id="rule-id">
           <fieldset class="market-field"><legend>시장</legend><div class="market-options"><label><input type="radio" name="market" value="KR" checked><span>한국 <small>KRW</small></span></label><label><input type="radio" name="market" value="US"><span>미국 <small>USD</small></span></label></div></fieldset>
@@ -52,13 +60,6 @@
         <div id="check-results" class="check-results" hidden><h3>이번 확인 결과</h3><ul id="check-results-list"></ul></div>
       </section>
     </div>
-
-    <section class="card settings" aria-labelledby="cloud-title">
-      <div class="card-heading"><div><p class="eyebrow">DAILY CLOUD ALERT</p><h2 id="cloud-title">PC를 꺼도 매일 오전 7시 확인</h2></div><button id="export-cloud" class="button secondary" type="button">GitHub 설정 JSON 내보내기</button></div>
-      <p class="section-note">등록한 관심 종목을 내보내 저장소의 watchlist.json에 반영하세요. GitHub Actions가 한국 시간 매일 오전 7시에 전일 최종 거래일의 종가를 확인합니다. 예약 실행은 GitHub 사정에 따라 지연될 수 있습니다.</p>
-      <p class="section-note">발신 royhan88888@gmail.com → 수신 ykhan@dacpole.com · 발송용 앱 비밀번호는 저장소 Secret에 별도 등록합니다. 공개 저장소에서는 종목·목표가·발송 기록도 공개됩니다.</p>
-      <a class="text-button" href="https://github.com/roy888682/naver-stock-close-alert/blob/main/docs/GITHUB_ACTIONS.md" target="_blank" rel="noopener noreferrer">GitHub 자동 실행 설정 안내 ↗</a>
-    </section>
 
     <section class="card settings" id="settings" aria-labelledby="settings-title">
       <div class="card-heading"><div><p class="eyebrow">DELIVERY SETTINGS</p><h2 id="settings-title">이메일 · 자동 확인 설정</h2></div><span id="smtp-badge" class="badge neutral">설정 확인 중</span></div>
