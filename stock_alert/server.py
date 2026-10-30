@@ -75,6 +75,8 @@ def make_server(service, host="127.0.0.1", port=8765):
                     return self.output(service.lookup(query["market"][0], query["ticker"][0]))
                 if path == "/api/rules":
                     return self.output(service.snapshot())
+                if path == "/api/cloud-config":
+                    return self.output(service.cloud_config())
                 if path == "/api/status":
                     return self.output(dict(app_id="naver-stock-close-alert", instance_token=getattr(service, "instance_token", None),
                                             checking=service.check_lock.locked(), last_check=service.last_check, scheduler_running=service.scheduler_running))

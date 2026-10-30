@@ -188,6 +188,12 @@ class Service:
             alerts = [dict(r) for r in db.execute("SELECT * FROM alerts ORDER BY id DESC LIMIT 50")]
         return dict(rules=self.rules(), settings=self.settings(public=True), recent_alerts=alerts)
 
+    def cloud_config(self):
+        """Export only user rules, with stable IDs and no mail credentials/history."""
+        fields = ("market", "ticker", "name", "target_price", "upper_pct", "lower_pct", "mode", "enabled")
+        return dict(version=1, rules=[dict(id=f"rule-{rule['id']}", **{key: rule[key] for key in fields})
+                                     for rule in sorted(self.rules(), key=lambda rule: rule["id"])])
+
     def lookup(self, market, ticker):
         normalized = validate_rule(dict(market=market, ticker=ticker, target_price="1"))
         key = (normalized["market"], normalized["ticker"])

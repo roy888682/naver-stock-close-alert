@@ -140,6 +140,20 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.request("DELETE", f"/api/rules/{rule['id']}")[0], 404)
         self.assertEqual(self.request("PUT", f"/api/rules/{rule['id']}", {"enabled": True})[0], 404)
 
+    def test_cloud_export_contains_stable_rules_without_credentials_or_history(self):
+        rule = self.create_rule()
+        with patch.dict(os.environ, {"SMTP_PASSWORD": "test-only-private-password"}):
+            self.service.check()
+            status, config, _ = self.request("GET", "/api/cloud-config")
+        self.assertEqual(status, 200)
+        self.assertEqual(config, {"version": 1, "rules": [{
+            "id": f"rule-{rule['id']}", "market": "KR", "ticker": "005930", "name": "삼성전자",
+            "target_price": "100", "upper_pct": "5", "lower_pct": "5", "mode": "entry", "enabled": True}]})
+        self.request("PUT", f"/api/rules/{rule['id']}", {"target_price": "110"})
+        exported = self.request("GET", "/api/cloud-config")[1]
+        self.assertEqual(exported["rules"][0]["id"], config["rules"][0]["id"])
+        self.assertEqual(exported["rules"][0]["target_price"], "110")
+
     def test_preview_does_not_send_and_real_check_is_deduplicated(self):
         self.create_rule()
         status, preview, _ = self.request("POST", "/api/check", {"send": False})

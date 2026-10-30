@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "samsung-example",
+      "market": "KR",
+      "ticker": "005930",
+      "name": "삼성전자",
+      "target_price": "100000",
+      "upper_pct": "5",
+      "lower_pct": "5",
+      "mode": "daily",
+      "enabled": false
+    },
+    {
+      "id": "apple-example",
+      "market": "US",
+      "ticker": "AAPL",
+      "name": "애플",
+      "target_price": "200",
+      "upper_pct": "3",
+      "lower_pct": "2",
+      "mode": "daily",
+      "enabled": false
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+name: Daily close alert (07:00 KST)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - watchlist.json
+      - .github/workflows/daily-close-alert.yml
+      - stock_alert/cloud.py
+      - scripts/action_state.py
+  schedule:
+    # GitHub cron uses UTC. 22:00 UTC is 07:00 the next day in Korea.
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'check=확인·발송, check-only=메일 없이 확인, test-email=연결 테스트, lookup=종목명 조회'
+        type: choice
+        options: [check-only, check, test-email, lookup]
+        default: check-only
+      market:
+        description: 'lookup에 사용할 시장'
+        type: choice
+        options: [KR, US]
+        default: KR
+      ticker:
+        description: 'lookup에 사용할 티커 (예: 005930, AAPL)'
+        type: string
+        default: '005930'
+
+permissions:
+  contents: write
+
+# Schedule, manual checks, and retries all share the same durable state.
+concurrency:
+  group: stock-close-alert-state
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Configuration/code pushes validate without emailing; schedules send.
+      ALERT_ACTION: ${{ github.event_name == 'push' && 'check-only' || github.event.inputs.action || 'check' }}
+      LOOKUP_MARKET: ${{ github.event.inputs.market || 'KR' }}
+      LOOKUP_TICKER: ${{ github.event.inputs.ticker || '005930' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Restore durable alert state
+        id: restore
+        if: env.ALERT_ACTION == 'check' || env.ALERT_ACTION == 'check-only'
+        run: python scripts/action_state.py restore
+      - name: Check completed closes or run the selected utility
+        id: monitor
+        env:
+          # Existing installations may already use GMAIL_APP_PASSWORD.
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || secrets.GMAIL_APP_PASSWORD }}
+        shell: bash
+        run: |
+          case "$ALERT_ACTION" in
+            check) python -m stock_alert.cloud --persist-state ;;
+            check-only) python -m stock_alert.cloud --check-only ;;
+            test-email) python -m stock_alert.cloud --test-email ;;
+            lookup) python -m stock_alert.cloud --lookup "$LOOKUP_MARKET" "$LOOKUP_TICKER" ;;
+            *) echo "알 수 없는 실행 작업입니다."; exit 1 ;;
+          esac
+      - name: Save state even after a partial failure
+        if: always() && steps.restore.outcome == 'success' && (env.ALERT_ACTION == 'check' || env.ALERT_ACTION == 'check-only') && steps.monitor.outcome != 'skipped'
+        run: python scripts/action_state.py save
+      - name: Explain execution schedule
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### 종가 알림'
+            echo '매일 한국 시간 오전 7시 실행 예약입니다. GitHub 혼잡 시 실제 시작은 늦어질 수 있습니다.'
+            echo '발신: royhan88888@gmail.com / 수신: ykhan@dacpole.com'
+            echo '종목·목표가: main 브랜치의 watchlist.json / 발송 기록: alert-state 브랜치'
+            echo '메일 발송에는 저장소 Secret SMTP_PASSWORD(또는 GMAIL_APP_PASSWORD)가 필요합니다.'
+            echo '세부 결과와 오류는 위 실행 단계의 로그를 확인하세요.'
+          } >> "$GITHUB_STEP_SUMMARY"
