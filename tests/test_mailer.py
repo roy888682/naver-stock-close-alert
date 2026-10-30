@@ -60,6 +60,17 @@ class MailerTests(unittest.TestCase):
         self.ssl_constructor.assert_not_called()
         self.plain_constructor.assert_not_called()
 
+    def test_explicit_web_password_takes_precedence_over_environment(self):
+        self.settings["smtp_password"] = "saved-web-test-only"
+        send_mail(self.settings, "test", "body")
+        self.smtp.login.assert_called_once_with("sender@example.com", "saved-web-test-only")
+
+    def test_explicitly_cleared_password_does_not_fall_back_to_environment(self):
+        self.settings["smtp_password"] = ""
+        with self.assertRaises(MailError):
+            send_mail(self.settings, "test", "body")
+        self.ssl_constructor.assert_not_called()
+
     def test_auth_error_is_sanitized_and_safe_to_retry(self):
         self.smtp.login.side_effect = smtplib.SMTPAuthenticationError(535, b"test-only-app-pass private-server-details")
         with self.assertRaises(MailError) as caught:

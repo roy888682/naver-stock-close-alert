@@ -199,6 +199,8 @@ function renderSettings(settings) {
   const configured = Boolean(settings.smtp_password_configured && settings.smtp_host && settings.smtp_from);
   $("smtp-badge").className = `badge ${configured ? "success" : "neutral"}`;
   $("smtp-badge").textContent = configured ? "메일 발송 설정됨" : "메일 설정 필요";
+  $("password-state").textContent = settings.smtp_password_configured ? "비밀번호가 등록되어 있습니다. 변경할 때만 새로 입력하세요." : "등록된 비밀번호가 없습니다. 앱 비밀번호를 입력해 저장하세요.";
+  $("delete-password").disabled = !settings.smtp_password_configured;
 }
 
 async function refresh(updateSettings = true) {
@@ -281,13 +283,30 @@ $("settings-form").addEventListener("submit", async (event) => {
     smtp_username: $("smtp-username").value.trim(), smtp_from: $("smtp-from").value.trim(),
     interval_minutes: Number($("interval-minutes").value),
   };
+  if ($("smtp-password").value.trim()) body.smtp_password = $("smtp-password").value;
   try {
     await api("/api/settings", { method: "PUT", body: JSON.stringify(body) });
+    $("smtp-password").value = "";
     await refresh();
     await refreshStatus();
     announce("이메일과 자동 확인 설정을 저장했습니다.");
   } catch (error) { announce(error.message, "error", true); }
   finally { button.disabled = false; }
+});
+
+$("delete-password").addEventListener("click", async () => {
+  if (!window.confirm("저장된 앱 비밀번호를 삭제할까요? 새 비밀번호를 등록하기 전까지 메일 발송을 사용할 수 없습니다.")) return;
+  const button = $("delete-password");
+  button.disabled = true;
+  try {
+    await api("/api/settings/password", { method: "DELETE", body: "{}" });
+    $("smtp-password").value = "";
+    await refresh();
+    announce("저장된 앱 비밀번호를 삭제했습니다.");
+  } catch (error) {
+    announce(error.message, "error", true);
+    button.disabled = !snapshot.settings.smtp_password_configured;
+  }
 });
 
 $("test-email").addEventListener("click", async () => {

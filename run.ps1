@@ -25,12 +25,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not install requirements. Check your Internet connection and try again.' }
     }
 
-    if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.env'))) {
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot '.env.example') -Destination (Join-Path $PSScriptRoot '.env')
-        Write-Host 'Created .env. Set SMTP_PASSWORD before sending mail. Restart the program after editing .env.'
-    }
-
     Write-Host 'Opening the stock alert dashboard at http://127.0.0.1:8765'
+    Write-Host 'Save your Gmail app password in Email settings, then send a test email.'
     Write-Host 'Keep this window open for automatic checks. Press Ctrl+C to stop.'
     & $venvPython -m stock_alert @args
     exit $LASTEXITCODE

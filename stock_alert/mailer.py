@@ -13,9 +13,9 @@ class MailError(RuntimeError):
 
 
 def send_mail(settings, subject, body):
-    password = os.environ.get("SMTP_PASSWORD", "").strip()
+    password = settings.get("smtp_password", os.environ.get("SMTP_PASSWORD", "")).strip()
     if not password:
-        raise MailError("SMTP_PASSWORD가 없습니다. .env에 Gmail 앱 비밀번호를 설정하고 다시 실행하세요.")
+        raise MailError("이메일 설정에서 Gmail 앱 비밀번호를 입력하고 저장하세요.")
     if not settings["smtp_username"] or not settings["smtp_from"]:
         raise MailError("SMTP 사용자명과 발신 주소를 설정하세요.")
     msg = EmailMessage()

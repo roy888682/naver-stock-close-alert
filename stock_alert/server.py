@@ -88,6 +88,8 @@ def make_server(service, host="127.0.0.1", port=8765):
                     return self.output({"ok": True})
                 if self.command == "PUT" and path == "/api/settings":
                     return self.output(service.update_settings(data))
+                if self.command == "DELETE" and path == "/api/settings/password":
+                    return self.output(service.delete_password())
                 if self.command == "POST" and path == "/api/check":
                     send = data.get("send", False)
                     if not isinstance(send, bool):

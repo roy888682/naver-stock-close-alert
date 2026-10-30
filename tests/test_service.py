@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from stock_alert.mailer import MailError
 from stock_alert.service import Service, in_range, validate_rule
+from stock_alert.credentials import CredentialError
 
 
 class FakeProvider:
@@ -237,7 +238,7 @@ class ServiceTests(unittest.TestCase):
                        {"smtp_host": "https://smtp.gmail.com"}, {"smtp_port": "NaN"},
                        {"smtp_port": 0}, {"smtp_port": 65536},
                        {"interval_minutes": 4}, {"interval_minutes": 1441},
-                       {"interval_minutes": "5.5"}, {"smtp_password": "never-store"}):
+                       {"interval_minutes": "5.5"}, {"unknown_setting": "invalid"}):
             with self.subTest(change=change):
                 with self.assertRaises(ValueError):
                     self.service.update_settings(change)
@@ -251,6 +252,90 @@ class ServiceTests(unittest.TestCase):
             self.assertNotIn("smtp_password", exposed)
         with patch.dict(os.environ, {"SMTP_PASSWORD": ""}):
             self.assertFalse(self.service.settings(public=True)["smtp_password_configured"])
+
+    def test_web_password_is_persistent_private_and_used_without_restart(self):
+        password = "test-only-web-app-pass"
+        result = self.service.update_settings({"smtp_password": password})
+        self.assertTrue(result["smtp_password_configured"])
+        self.assertNotIn(password, repr(result))
+        self.assertNotIn("smtp_password", self.service.settings())
+        self.assertNotIn(password, repr(self.service.snapshot()))
+        with self.service.db() as db:
+            self.assertNotIn(password, repr([tuple(row) for row in db.execute("SELECT * FROM settings")]))
+        self.service.test_email()
+        self.assertEqual(self.mailer.calls[-1][0]["smtp_password"], password)
+        self.assertNotIn(password, repr(self.mailer.calls[-1][1:]))
+        restarted = Service(self.db_path, self.provider, self.mailer)
+        self.assertTrue(restarted.settings(public=True)["smtp_password_configured"])
+        restarted.test_email()
+        self.assertEqual(self.mailer.calls[-1][0]["smtp_password"], password)
+
+    def test_blank_web_password_preserves_saved_value_and_gmail_spaces_are_removed(self):
+        self.service.update_settings({"smtp_password": "abcd efgh ijkl mnop"})
+        self.service.update_settings({"interval_minutes": 45, "smtp_password": ""})
+        self.service.test_email()
+        self.assertEqual(self.mailer.calls[-1][0]["smtp_password"], "abcdefghijklmnop")
+        self.assertEqual(self.service.settings()["interval_minutes"], 45)
+
+    def test_web_password_wins_over_environment_and_delete_disables_legacy_password(self):
+        with patch.dict(os.environ, {"SMTP_PASSWORD": "legacy-test-only"}):
+            self.service.update_settings({"smtp_password": "web-test-only"})
+            self.service.test_email()
+            self.assertEqual(self.mailer.calls[-1][0]["smtp_password"], "web-test-only")
+            result = self.service.delete_password()
+            self.assertFalse(result["smtp_password_configured"])
+            restarted = Service(self.db_path, self.provider, self.mailer)
+            self.assertEqual(restarted._mail_settings()["smtp_password"], "")
+            self.assertFalse(restarted.settings(public=True)["smtp_password_configured"])
+
+    def test_changed_account_or_host_cannot_reuse_previous_password(self):
+        with patch.dict(os.environ, {"SMTP_PASSWORD": "legacy-test-only"}):
+            self.service.update_settings({"smtp_password": "original-test-only"})
+            result = self.service.update_settings({"smtp_username": "another@example.com"})
+            self.assertFalse(result["smtp_password_configured"])
+            self.assertEqual(self.service._mail_settings()["smtp_password"], "")
+            self.service.update_settings({"smtp_password": "replacement-test-only"})
+            result = self.service.update_settings({"smtp_host": "smtp.example.com"})
+            self.assertFalse(result["smtp_password_configured"])
+            result = self.service.update_settings({"smtp_password": "other-server-test-only"})
+            self.assertTrue(result["smtp_password_configured"])
+            self.assertEqual(self.service._mail_settings()["smtp_password"], "other-server-test-only")
+
+    def test_password_storage_failure_rolls_back_settings_and_keeps_previous_secret(self):
+        self.service.update_settings({"smtp_password": "original-test-only"})
+        initial = self.service.settings()
+        with patch.object(self.service.password_store, "set", side_effect=CredentialError("보관 오류")):
+            with self.assertRaises(CredentialError):
+                self.service.update_settings({"smtp_password": "replacement-test-only", "interval_minutes": 45})
+        self.assertEqual(self.service.settings(), initial)
+        self.assertEqual(self.service._mail_settings()["smtp_password"], "original-test-only")
+
+    def test_bad_password_inputs_are_rejected_without_changing_settings(self):
+        initial = self.service.settings()
+        for value in (None, [], True, "x\ny", "x\ry", "x\x00y", "x" * 257):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    self.service.update_settings({"smtp_password": value, "interval_minutes": 45})
+                self.assertEqual(self.service.settings(), initial)
+                self.assertFalse(self.service.password_store.path.exists())
+
+    def test_unreadable_credential_can_be_replaced_and_retry_is_safe(self):
+        self.add_rule()
+        self.service.password_store.path.write_text("invalid credential", encoding="utf-8")
+        public = self.service.settings(public=True)
+        self.assertFalse(public["smtp_password_configured"])
+        self.assertNotIn("invalid credential", repr(public))
+        self.assertEqual(self.service.check()["errors"], 1)
+        self.assertEqual(self.service.snapshot()["recent_alerts"][0]["status"], "failed")
+        self.assertEqual(self.mailer.calls, [])
+        self.service.update_settings({"smtp_password": "replacement-test-only"})
+        self.assertEqual(self.service.check()["sent"], 1)
+
+    def test_scheduled_check_uses_saved_web_password(self):
+        self.add_rule()
+        self.service.update_settings({"smtp_password": "scheduled-test-only"})
+        self.assertEqual(self.service.check()["sent"], 1)
+        self.assertEqual(self.mailer.calls[-1][0]["smtp_password"], "scheduled-test-only")
 
 
 if __name__ == "__main__":

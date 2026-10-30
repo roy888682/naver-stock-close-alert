@@ -4,6 +4,8 @@
 !.env.example
 *.pem
 *.key
+smtp-credential.json
+.smtp-*
 
 # Local application state
 data/

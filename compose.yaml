@@ -4,8 +4,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8765:8765"
-    env_file:
-      - .env
     volumes:
       - alert-data:/app/data
     healthcheck:

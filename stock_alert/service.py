@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .mailer import MailError, send_mail
 from .provider import NaverProvider
+from .credentials import CredentialError, PasswordStore
 
 DEFAULTS = dict(recipient="ykhan@dacpole.com", smtp_host="smtp.gmail.com", smtp_port=465,
                 smtp_security="ssl", smtp_username="royhan88888@gmail.com", smtp_from="royhan88888@gmail.com",
@@ -66,6 +67,7 @@ class Service:
     def __init__(self, db_path, provider=None, mailer=None):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.password_store = PasswordStore(self.db_path.parent / "smtp-credential.json")
         self.provider = provider or NaverProvider()
         self.mailer = mailer or send_mail
         self.check_lock = threading.Lock()
@@ -86,6 +88,8 @@ class Service:
             """)
             for key, value in DEFAULTS.items():
                 db.execute("INSERT OR IGNORE INTO settings VALUES (?,?)", (key, json.dumps(value)))
+        initial = self.settings()
+        self._env_binding = (initial["smtp_username"], initial["smtp_host"].lower())
 
     @contextmanager
     def db(self):
@@ -101,14 +105,43 @@ class Service:
         with self.db() as db:
             result = {r["key"]: json.loads(r["value"]) for r in db.execute("SELECT * FROM settings")}
         if public:
-            result["smtp_password_configured"] = bool(os.environ.get("SMTP_PASSWORD", "").strip())
+            try:
+                result["smtp_password_configured"] = bool(self._password(result))
+            except CredentialError as exc:
+                result["smtp_password_configured"] = False
+                result["smtp_password_error"] = str(exc)
         return result
 
+    def _password(self, settings):
+        if self.password_store.path.exists():
+            return self.password_store.get(settings["smtp_username"], settings["smtp_host"])
+        if (settings["smtp_username"], settings["smtp_host"].lower()) == self._env_binding:
+            return os.environ.get("SMTP_PASSWORD", "").strip()
+        return ""
+
+    def _mail_settings(self):
+        settings = self.settings()
+        try:
+            settings["smtp_password"] = self._password(settings)
+        except CredentialError as exc:
+            raise MailError(str(exc)) from None
+        return settings
+
+    def delete_password(self):
+        with self.check_lock:
+            self.password_store.clear()
+        return self.settings(public=True)
+
     def update_settings(self, data):
-        if not isinstance(data, dict) or set(data) - DEFAULTS.keys():
+        if not isinstance(data, dict) or set(data) - (DEFAULTS.keys() | {"smtp_password"}):
             raise ValueError("알 수 없는 설정 항목입니다.")
+        password = data.get("smtp_password", "")
+        if not isinstance(password, str) or len(password) > 256 or any(c in password for c in "\r\n\x00"):
+            raise ValueError("앱 비밀번호를 확인하세요. 줄바꿈 없이 256자까지 입력할 수 있습니다.")
+        password = password.strip()
         result = self.settings()
-        result.update(data)
+        original_binding = (result["smtp_username"], result["smtp_host"].lower())
+        result.update({k: v for k, v in data.items() if k != "smtp_password"})
         for key in ("recipient", "smtp_from", "smtp_username", "smtp_host"):
             result[key] = str(result[key]).strip()
             if len(result[key]) > 254 or any(ord(c) < 32 for c in result[key]):
@@ -118,6 +151,8 @@ class Service:
                 raise ValueError("발신·수신 주소는 이메일 주소 하나씩 입력하세요.")
         if not re.fullmatch(r"[A-Za-z0-9.\-]+", result["smtp_host"]):
             raise ValueError("SMTP 서버 이름을 확인하세요.")
+        if result["smtp_host"].lower() == "smtp.gmail.com":
+            password = password.replace(" ", "")
         if result["smtp_security"] not in ("ssl", "starttls"):
             raise ValueError("SSL 또는 STARTTLS를 선택하세요.")
         for key, low, high in (("smtp_port", 1, 65535), ("interval_minutes", 5, 1440)):
@@ -128,8 +163,13 @@ class Service:
                 result[key] = int(d)
             except (ValueError, InvalidOperation, OverflowError):
                 raise ValueError(f"{key}: {low} ~ {high} 사이 정수를 입력하세요.") from None
-        with self.db() as db:
+        with self.check_lock, self.db() as db:
             db.executemany("UPDATE settings SET value=? WHERE key=?", [(json.dumps(v), k) for k, v in result.items()])
+            if password:
+                self.password_store.set(password, result["smtp_username"], result["smtp_host"])
+            elif (result["smtp_username"], result["smtp_host"].lower()) != original_binding:
+                # Never send an old password to a changed server or account.
+                self.password_store.clear()
         return self.settings(public=True)
 
     def rules(self):
@@ -173,7 +213,7 @@ class Service:
                 raise KeyError("종목을 찾을 수 없습니다.")
 
     def test_email(self):
-        self.mailer(self.settings(), "[종가 알림] 이메일 연결 테스트",
+        self.mailer(self._mail_settings(), "[종가 알림] 이메일 연결 테스트",
                     "네이버증권 종가 알림 프로그램의 테스트 메일입니다.\n이 메일이 도착하면 수신 경로를 확인할 수 있습니다.\n" + utcnow())
         return {"message": "메일 서버가 테스트메일을 접수했습니다. 수신함·스팸함을 확인하세요."}
 
@@ -220,7 +260,7 @@ class Service:
                                         f"허용 비율: -{rule['lower_pct']}% ~ +{rule['upper_pct']}%\n"
                                         f"목표가 대비: {(quote.close / Decimal(rule['target_price']) - 1) * 100:+.2f}%\n"
                                         f"출처: {quote.source_url}\n\n발송 시각(UTC): {utcnow()}\n")
-                                message_id = self.mailer(self.settings(), f"[종가 알림] {rule['ticker']} · {day} · 목표 범위 진입", body)
+                                message_id = self.mailer(self._mail_settings(), f"[종가 알림] {rule['ticker']} · {day} · 목표 범위 진입", body)
                             except Exception as exc:
                                 uncertain = not isinstance(exc, MailError) or exc.uncertain
                                 with self.db() as db:

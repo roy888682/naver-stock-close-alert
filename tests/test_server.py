@@ -171,7 +171,8 @@ class ServerTests(unittest.TestCase):
                                    ("PUT", "/api/settings", {"recipient": "elsewhere@example.com"}),
                                    ("DELETE", "/api/rules/1", {}),
                                    ("POST", "/api/test-email", {}),
-                                   ("POST", "/api/check", {"send": True})):
+                                   ("POST", "/api/check", {"send": True}),
+                                   ("DELETE", "/api/settings/password", {})):
             with self.subTest(method=method, path=path):
                 self.assertEqual(self.request(method, path, data, secure=False)[0], 403)
         self.assertEqual(self.service.rules(), [])
@@ -223,7 +224,29 @@ class ServerTests(unittest.TestCase):
         self.assertIn("message", payload)
         self.assertEqual(self.mailer.calls[0][0]["recipient"], "alerts@example.com")
         self.assertEqual(self.provider.calls, [])
-        self.assertEqual(self.request("PUT", "/api/settings", {"smtp_password": "dont-store"})[0], 400)
+        self.assertEqual(self.request("PUT", "/api/settings", {"smtp_password": None})[0], 400)
+
+    def test_browser_password_save_keep_use_and_delete_never_echo_secret(self):
+        password = "fake-web-password-only"
+        status, payload, _ = self.request("PUT", "/api/settings", {"smtp_password": password})
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["smtp_password_configured"])
+        self.assertNotIn(password, repr(payload))
+        self.assertEqual(self.request("PUT", "/api/settings", {"smtp_password": ""})[0], 200)
+        self.assertEqual(self.request("POST", "/api/test-email")[0], 200)
+        self.assertEqual(self.mailer.calls[-1][0]["smtp_password"], password)
+        snapshot = self.request("GET", "/api/rules")[1]
+        self.assertNotIn(password, repr(snapshot))
+        self.assertNotIn("smtp_password", snapshot["settings"])
+        for path in ("/data/smtp-credential.json", "/smtp-credential.json"):
+            self.assertEqual(self.request("GET", path)[0], 404)
+        self.assertEqual(self.request("DELETE", "/api/settings/password", secure=False)[0], 403)
+        self.assertTrue(self.service.settings(public=True)["smtp_password_configured"])
+        self.assertEqual(self.request("DELETE", "/api/settings/password", headers={"Origin": "https://example.com"})[0], 403)
+        status, payload, _ = self.request("DELETE", "/api/settings/password")
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["smtp_password_configured"])
+        self.assertEqual(self.service._mail_settings()["smtp_password"], "")
 
     def test_invalid_json_shape_content_type_and_oversized_body_are_rejected(self):
         for body in (b"{broken", b"[]", b"null", b'"string"'):

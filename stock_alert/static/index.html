@@ -64,9 +64,10 @@
           <div class="form-row"><label for="smtp-security">보안 연결</label><select id="smtp-security" name="smtp_security"><option value="starttls">STARTTLS · 보통 587</option><option value="ssl">SSL/TLS · 보통 465</option></select></div>
           <div class="form-row"><label for="smtp-username">SMTP 사용자 이름</label><input id="smtp-username" name="smtp_username" value="royhan88888@gmail.com" placeholder="발신 계정 이메일" maxlength="254" autocomplete="username"></div>
           <div class="form-row"><label for="smtp-from">발신 이메일</label><input id="smtp-from" name="smtp_from" type="email" value="royhan88888@gmail.com" placeholder="yourname@gmail.com"></div>
+          <div class="form-row password-field"><label for="smtp-password">Gmail 앱 비밀번호</label><input id="smtp-password" name="smtp_password" type="password" autocomplete="new-password" maxlength="256" placeholder="앱 비밀번호 입력" aria-describedby="password-help password-state"><small id="password-state">저장된 비밀번호를 확인하고 있습니다.</small></div>
         </div>
-        <div class="password-note"><span aria-hidden="true">♧</span><p><strong>비밀번호는 환경변수로 설정합니다.</strong><br>실행 전에 <code>SMTP_PASSWORD</code>에 메일 앱 비밀번호를 설정하세요. 비밀번호는 이 화면이나 GitHub에 저장하지 않습니다.</p></div>
-        <div class="settings-footer"><p>자동 확인은 프로그램이 실행 중일 때 동작합니다.<br>테스트 메일은 저장된 설정으로 발송합니다.</p><div><button id="test-email" class="button secondary" type="button">테스트 메일 보내기</button><button id="save-settings" class="button primary" type="submit">설정 저장</button></div></div>
+        <div class="password-note"><span aria-hidden="true">♧</span><div><p id="password-help"><strong>Gmail에서 발급받은 앱 비밀번호를 입력하세요.</strong><br>저장하면 이 PC에 보관되며 다시 표시하지 않습니다. 비워 두면 기존 비밀번호를 유지합니다.</p><div class="password-links"><a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google 앱 비밀번호 발급 ↗</a><button id="delete-password" class="text-button danger" type="button" disabled>저장된 비밀번호 삭제</button></div></div></div>
+        <div class="settings-footer"><p>자동 확인은 프로그램이 실행 중일 때 동작합니다.<br>설정을 저장한 뒤 테스트 메일로 수신을 확인하세요.</p><div><button id="test-email" class="button secondary" type="button">테스트 메일 보내기</button><button id="save-settings" class="button primary" type="submit">이메일 설정 저장</button></div></div>
       </form>
     </section>
 
