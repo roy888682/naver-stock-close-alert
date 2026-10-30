@@ -1,0 +1,2 @@
+# Python 3.11+. Used by zoneinfo on Windows and minimal containers.
+tzdata>=2025.2

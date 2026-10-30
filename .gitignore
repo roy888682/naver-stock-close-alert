@@ -1,9 +1,33 @@
+# Secrets and local configuration
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+
+# Local application state
 data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+
+# Python and development tools
 .venv/
+venv/
 __pycache__/
 *.py[cod]
-*.db
-*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
