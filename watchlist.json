@@ -1,4 +1,27 @@
 {
   "version": 1,
-  "rules": []
+  "rules": [
+    {
+      "id": "65ecad21-2f25-41f6-9564-237ac0ad4b05",
+      "market": "KR",
+      "ticker": "005930",
+      "name": "삼성전자",
+      "target_price": "210000",
+      "upper_pct": "2",
+      "lower_pct": "2",
+      "mode": "daily",
+      "enabled": true
+    },
+    {
+      "id": "b620445d-242c-4a47-982a-ef66ddb7f990",
+      "market": "US",
+      "ticker": "AAPL",
+      "name": "애플",
+      "target_price": "340",
+      "upper_pct": "5",
+      "lower_pct": "5",
+      "mode": "daily",
+      "enabled": true
+    }
+  ]
 }
