@@ -22,6 +22,17 @@
       "lower_pct": "5",
       "mode": "daily",
       "enabled": true
+    },
+    {
+      "id": "54311675-dbfb-4991-a1eb-39cb259a2363",
+      "market": "US",
+      "ticker": "UPRO",
+      "name": "ProShares UltraPro S&P500",
+      "target_price": "141",
+      "upper_pct": "5",
+      "lower_pct": "5",
+      "mode": "daily",
+      "enabled": true
     }
   ]
 }
