@@ -14,8 +14,9 @@ from pathlib import Path
 
 SITE_ID = "appgprj_6ae4941c8a3c8191b9c7fe8ed95ee3fa"
 REQUEST_FILE = "cloud-run-request.json"
+TEST_REQUEST_FILE = "cloud-test-request.json"
 SEOUL = timezone(timedelta(hours=9))
-ACTIONS = {"check", "check-only", "test-email", "lookup"}
+ACTIONS = {"check", "check-only", "test-email", "test-digest", "lookup"}
 
 
 def validate_request(document, now=None):
@@ -40,8 +41,13 @@ def validate_request(document, now=None):
     return document
 
 
-def decide_action(event_name, inputs=None, changed_paths=(), request=None, now=None):
+def decide_action(event_name, inputs=None, changed_paths=(), request=None, now=None, test_request=None):
     if event_name == "push":
+        if TEST_REQUEST_FILE in changed_paths:
+            if REQUEST_FILE in changed_paths:
+                raise ValueError("정기 발송과 테스트 발송은 별도 요청으로 실행하세요.")
+            validate_request(test_request, now)
+            return "test-digest"
         if REQUEST_FILE not in changed_paths:
             return "check-only"
         validate_request(request, now)
@@ -80,6 +86,7 @@ def main(argv=None):
     parser.add_argument("--event-name", default=os.environ.get("GITHUB_EVENT_NAME"))
     parser.add_argument("--commit", default=os.environ.get("GITHUB_SHA"))
     parser.add_argument("--request", default=REQUEST_FILE)
+    parser.add_argument("--test-request", default=TEST_REQUEST_FILE)
     parser.add_argument("--config", default="watchlist.json")
     parser.add_argument("--output", default=os.environ.get("GITHUB_OUTPUT"))
     args = parser.parse_args(argv)
@@ -89,8 +96,9 @@ def main(argv=None):
             raise ValueError("실행 이벤트 형식을 확인하세요.")
         paths = changed_paths(args.commit) if args.event_name == "push" else []
         request = read_json(args.request) if REQUEST_FILE in paths else None
-        action = decide_action(args.event_name, event.get("inputs"), paths, request)
-        if action in ("check", "check-only"):
+        test_request = read_json(args.test_request) if TEST_REQUEST_FILE in paths else None
+        action = decide_action(args.event_name, event.get("inputs"), paths, request, test_request=test_request)
+        if action in ("check", "check-only", "test-digest"):
             # Match the existing runner's full schema before touching alert state.
             sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
             from stock_alert.cloud import load_config

@@ -63,6 +63,18 @@ class RequestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             bridge.decide_action("schedule")
 
+    def test_dated_test_request_runs_full_report_without_daily_request(self):
+        self.assertEqual(bridge.decide_action("push", changed_paths=[bridge.TEST_REQUEST_FILE],
+                         test_request=request(), now=NOW), "test-digest")
+        self.assertEqual(bridge.decide_action("push", changed_paths=["stock_alert/digest.py"],
+                         test_request=request(), now=NOW), "check-only")
+        with self.assertRaises(ValueError):
+            bridge.decide_action("push", changed_paths=[bridge.TEST_REQUEST_FILE],
+                                 test_request=request(request_date="2000-01-01"), now=NOW)
+        with self.assertRaises(ValueError):
+            bridge.decide_action("push", changed_paths=[bridge.TEST_REQUEST_FILE, bridge.REQUEST_FILE],
+                                 request=request(), test_request=request(), now=NOW)
+
 
 class GitAndCliTests(unittest.TestCase):
     def setUp(self):

@@ -113,16 +113,22 @@ class CloudService(Service):
         if before_send is not None:
             transport = self.mailer
 
-            def persisted_mailer(settings, subject, body):
+            def persisted_mailer(settings, subject, body, *, html_body=None):
                 # Service.check commits 'pending' before invoking its mailer.
                 # Persist that reservation remotely before SMTP can accept it.
                 try:
                     before_send()
                 except Exception:
                     raise MailError("발송 전 상태 저장 실패: 메일을 발송하지 않았습니다. Actions 상태 저장 로그를 확인하세요.") from None
-                return transport(settings, subject, body)
+                if html_body is None:
+                    return transport(settings, subject, body)
+                return transport(settings, subject, body, html_body=html_body)
 
             self.mailer = persisted_mailer
+
+    def digest(self, *, test=False, now=None, send=True):
+        from .digest import send_digest
+        return send_digest(self, test=test, now=now, send=send)
 
     def _password(self, settings):
         password = os.environ.get("SMTP_PASSWORD", "").strip().replace(" ", "")
@@ -147,10 +153,12 @@ def main(argv=None):
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--check-only", action="store_true", help="메일·중복 상태 변경 없이 종가 확인")
     action.add_argument("--test-email", action="store_true")
+    action.add_argument("--digest", action="store_true", help="화~토 전체 종목 목록을 하루 한 통 발송")
+    action.add_argument("--test-digest", action="store_true", help="현재 전체 종목 목록을 테스트 메일로 발송")
     action.add_argument("--lookup", nargs=2, metavar=("MARKET", "TICKER"))
     args = parser.parse_args(argv)
     if args.persist_state and (args.check_only or args.test_email or args.lookup):
-        parser.error("--persist-state는 기본 확인·발송 실행에서만 사용할 수 있습니다.")
+        parser.error("--persist-state는 기본 확인·발송 또는 목록 메일 실행에서만 사용할 수 있습니다.")
     try:
         if args.lookup:
             result = NaverProvider().lookup(*args.lookup)
@@ -162,10 +170,13 @@ def main(argv=None):
                 service = CloudService(directory / "alerts.db", before_send=before_send)
                 if config is not None:
                     sync_rules(service, config)
-                if args.test_email or (not args.check_only and any(row["enabled"] for row in config["rules"])):
+                if args.test_email or args.digest or args.test_digest or (not args.check_only and any(row["enabled"] for row in config["rules"])):
                     if not service._password(service.settings()):
                         raise ValueError("GitHub 저장소의 Actions Secret에 SMTP_PASSWORD를 등록하세요. 발신 Gmail 계정의 앱 비밀번호가 필요합니다.")
-                result = service.test_email() if args.test_email else service.check(send=not args.check_only)
+                if args.digest or args.test_digest:
+                    result = service.digest(test=args.test_digest)
+                else:
+                    result = service.test_email() if args.test_email else service.check(send=not args.check_only)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 1 if result.get("errors") else 0
     except (OSError, ValueError, RuntimeError, sqlite3.Error) as exc:

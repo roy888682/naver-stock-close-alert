@@ -12,7 +12,7 @@ class MailError(RuntimeError):
         self.uncertain = uncertain
 
 
-def send_mail(settings, subject, body):
+def send_mail(settings, subject, body, *, html_body=None):
     password = settings.get("smtp_password", os.environ.get("SMTP_PASSWORD", "")).strip()
     if not password:
         raise MailError("이메일 설정에서 Gmail 앱 비밀번호를 입력하고 저장하세요.")
@@ -25,6 +25,8 @@ def send_mail(settings, subject, body):
     msg["Date"] = formatdate(localtime=False)
     msg["Message-ID"] = make_msgid(domain="gmail.com")
     msg.set_content(body)
+    if html_body is not None:
+        msg.add_alternative(html_body, subtype="html")
     smtp = None
     sending = False
     try:

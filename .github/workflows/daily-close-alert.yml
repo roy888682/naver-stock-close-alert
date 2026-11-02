@@ -6,18 +6,21 @@ on:
     paths:
       - watchlist.json
       - cloud-run-request.json
+      - cloud-test-request.json
       - .github/workflows/daily-close-alert.yml
       - stock_alert/cloud.py
+      - stock_alert/digest.py
+      - stock_alert/mailer.py
       - scripts/action_state.py
       - scripts/site_bridge.py
-  # The linked private Site task supplies fresh conditions at 07:00 KST.
+  # The linked private Site task supplies fresh conditions Tue-Sat at 07:00 KST.
   # Its atomic watchlist + dated-request commit triggers delivery below.
   workflow_dispatch:
     inputs:
       action:
-        description: 'check=확인·발송, check-only=메일 없이 확인, test-email=연결 테스트, lookup=종목명 조회'
+        description: 'check=전체 목록 발송, check-only=메일 없이 확인, test-digest=전체 목록 테스트, test-email=연결 테스트, lookup=종목명 조회'
         type: choice
-        options: [check-only, check, test-email, lookup]
+        options: [check-only, check, test-digest, test-email, lookup]
         default: check-only
       market:
         description: 'lookup에 사용할 시장'
@@ -61,7 +64,7 @@ jobs:
         run: python scripts/site_bridge.py
       - name: Restore durable alert state
         id: restore
-        if: steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only'
+        if: steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only' || steps.action.outputs.action == 'test-digest'
         run: python scripts/action_state.py restore
       - name: Check completed closes or run the selected utility
         id: monitor
@@ -72,14 +75,15 @@ jobs:
         shell: bash
         run: |
           case "$ALERT_ACTION" in
-            check) python -m stock_alert.cloud --persist-state ;;
+            check) python -m stock_alert.cloud --digest --persist-state ;;
             check-only) python -m stock_alert.cloud --check-only ;;
+            test-digest) python -m stock_alert.cloud --test-digest --persist-state ;;
             test-email) python -m stock_alert.cloud --test-email ;;
             lookup) python -m stock_alert.cloud --lookup "$LOOKUP_MARKET" "$LOOKUP_TICKER" ;;
             *) echo "알 수 없는 실행 작업입니다."; exit 1 ;;
           esac
       - name: Save state even after a partial failure
-        if: always() && steps.restore.outcome == 'success' && (steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only') && steps.monitor.outcome != 'skipped'
+        if: always() && steps.restore.outcome == 'success' && (steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only' || steps.action.outputs.action == 'test-digest') && steps.monitor.outcome != 'skipped'
         run: python scripts/action_state.py save
       - name: Explain execution schedule
         if: always()
@@ -87,7 +91,8 @@ jobs:
         run: |
           {
             echo '### 종가 알림'
-            echo '웹사이트에 연결된 작업이 한국 시간 오전 7시에 최신 조건을 전달합니다. 실제 시작은 늦어질 수 있습니다.'
+            echo '웹사이트에 연결된 작업이 매주 화요일~토요일 한국 시간 오전 7시에 최신 조건을 전달합니다. 실제 시작은 늦어질 수 있습니다.'
+            echo '목표 범위 일치 여부와 관계없이 전체 목록 메일을 한 통 보냅니다. 도달 종목을 먼저 표시하고 종목명과 상태를 빨간색으로 표시합니다.'
             echo '발신: royhan88888@gmail.com / 수신: ykhan@dacpole.com'
             echo '종목·목표가는 웹사이트에서 관리합니다. 발송 기록은 alert-state 브랜치에 보관합니다.'
             echo '메일 발송에는 저장소 Secret SMTP_PASSWORD(또는 GMAIL_APP_PASSWORD)가 필요합니다.'
