@@ -40,8 +40,8 @@ def validate_rule(data):
     ticker = str(data.get("ticker", "")).strip().upper()
     if market not in ("KR", "US"):
         raise ValueError("시장은 KR 또는 US여야 합니다.")
-    if not re.fullmatch(r"[0-9]{6}" if market == "KR" else r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
-        raise ValueError("한국은 6자리 코드, 미국은 올바른 티커를 입력하세요.")
+    if not re.fullmatch(r"[0-9A-Z]{6}" if market == "KR" else r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
+        raise ValueError("한국은 영문·숫자 6자리 코드, 미국은 올바른 티커를 입력하세요.")
     mode = data.get("mode", "entry")
     if mode not in ("entry", "daily"):
         raise ValueError("알림 방식은 entry 또는 daily여야 합니다.")

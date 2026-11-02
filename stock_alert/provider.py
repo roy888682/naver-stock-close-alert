@@ -89,7 +89,9 @@ class NaverProvider:
         if not raw or not re.fullmatch(r"[A-Za-z][A-Za-z0-9.\- ]{0,19}", raw):
             raise ProviderError("미국 티커를 확인하세요. 예: AAPL, IBM, BRK.B, AAPL.O")
         upper = raw.upper()
-        if upper.endswith(".O"):
+        # NAVER's AMEX-listed ETFs use .K (for example SOXL.K and SCHD.K).
+        # Check exchange suffixes before interpreting .B/.A as share classes.
+        if upper.endswith((".O", ".K")):
             return [upper]
         if upper.endswith(".N"):
             # NAVER uses bare Reuters symbols for NYSE (IBM, not IBM.N).
@@ -102,12 +104,12 @@ class NaverProvider:
         # Preserve an explicitly entered Reuters class suffix such as BRKb.
         if re.fullmatch(r"[A-Z0-9]+[a-z]", raw):
             return [raw, raw + ".O"]
-        return [upper + ".O", upper]
+        return [upper + ".O", upper, upper + ".K"]
 
     def _basic(self, market: str, ticker: str) -> tuple[str, dict[str, Any]]:
         if market == "KR":
-            if not re.fullmatch(r"\d{6}", ticker):
-                raise ProviderError("한국 종목코드는 005930처럼 6자리로 입력하세요.")
+            if not re.fullmatch(r"[0-9A-Z]{6}", ticker):
+                raise ProviderError("한국 종목코드는 005930, 0016X0처럼 영문·숫자 6자리로 입력하세요.")
             data = self._get_json(f"https://m.stock.naver.com/api/stock/{ticker}/basic")
             if not isinstance(data, dict) or not data.get("stockName"):
                 raise ProviderError("한국 종목의 기본 정보를 확인할 수 없습니다.")
@@ -144,6 +146,8 @@ class NaverProvider:
         ticker = str(ticker).strip()
         if market not in ("KR", "US"):
             raise ProviderError("시장은 KR 또는 US여야 합니다.")
+        if market == "KR":
+            ticker = ticker.upper()
         now = now or datetime.now(timezone.utc)
         if now.tzinfo is None or now.utcoffset() is None:
             raise ProviderError("조회 시각에는 시간대 정보가 필요합니다.")
@@ -216,8 +220,8 @@ class NaverProvider:
         ticker = str(ticker).strip().upper()
         if market not in ("KR", "US"):
             raise ProviderError("시장은 KR 또는 US여야 합니다.")
-        if not re.fullmatch(r"[0-9]{6}" if market == "KR" else r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
-            raise ProviderError("한국은 6자리 종목코드, 미국은 영문 티커를 입력하세요.")
+        if not re.fullmatch(r"[0-9A-Z]{6}" if market == "KR" else r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
+            raise ProviderError("한국은 영문·숫자 6자리 종목코드, 미국은 영문 티커를 입력하세요.")
         symbol, basic = self._basic(market, ticker)
         return dict(market=market, ticker=ticker, symbol=symbol,
                     name=str(basic["stockName"]), currency="KRW" if market == "KR" else "USD")
