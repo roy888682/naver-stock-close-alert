@@ -33,6 +33,17 @@
       "lower_pct": "5",
       "mode": "daily",
       "enabled": true
+    },
+    {
+      "id": "135c4479-eebc-4762-ba6c-8f65e69128cb",
+      "market": "US",
+      "ticker": "SOXL",
+      "name": "Direxion Daily Semiconductor Bull 3X ETF",
+      "target_price": "20",
+      "upper_pct": "5",
+      "lower_pct": "5",
+      "mode": "daily",
+      "enabled": true
     }
   ]
 }
