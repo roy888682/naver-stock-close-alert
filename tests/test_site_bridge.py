@@ -53,6 +53,28 @@ class RequestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             bridge.validate_request(request(), datetime(2026, 10, 30))
 
+    def test_november_5_morning_is_not_a_future_request_in_seoul(self):
+        # Regression for the paused cloud task: 07:00 KST is 22:00 UTC
+        # on the preceding calendar day. The request uses the Korean date.
+        now = datetime(2026, 11, 4, 22, 0, tzinfo=timezone.utc)
+        today = request(request_date="2026-11-05")
+        self.assertEqual(bridge.validate_request(today, now), today)
+        self.assertEqual(bridge.decide_action("push", changed_paths=[bridge.REQUEST_FILE],
+                         request=today, now=now), "check")
+        for day in ("2026-11-04", "2026-11-06"):
+            with self.subTest(day=day), self.assertRaises(ValueError):
+                bridge.validate_request(request(request_date=day), now)
+
+    def test_request_date_changes_at_korean_midnight_not_utc_midnight(self):
+        previous = datetime(2026, 11, 4, 14, 59, 59, tzinfo=timezone.utc)
+        midnight = datetime(2026, 11, 4, 15, 0, tzinfo=timezone.utc)
+        bridge.validate_request(request(request_date="2026-11-04"), previous)
+        bridge.validate_request(request(request_date="2026-11-05"), midnight)
+        with self.assertRaises(ValueError):
+            bridge.validate_request(request(request_date="2026-11-05"), previous)
+        with self.assertRaises(ValueError):
+            bridge.validate_request(request(request_date="2026-11-04"), midnight)
+
     def test_manual_utilities_are_whitelisted_and_other_events_rejected(self):
         self.assertEqual(bridge.decide_action("workflow_dispatch"), "check-only")
         for action in bridge.ACTIONS:
