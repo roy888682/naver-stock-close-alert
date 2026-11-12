@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from scripts import site_bridge as bridge
 from scripts import sync_site_watchlist as sync
 
-TOKEN = "test-only-service-credential"
+TOKEN = "test-only-" + "x" * 34
 RULE = dict(id="rule-1", market="US", ticker="SOXL", name="ETF", target_price="20",
             upper_pct="5", lower_pct="5", mode="daily", enabled=True)
 
@@ -121,7 +121,7 @@ class SiteSyncTests(unittest.TestCase):
         self.assertNotIn(TOKEN, str(caught.exception))
 
     def test_invalid_secret_rejected_before_network(self):
-        for token in ("", None, "token\r\nheader: injected", "x" * 8193):
+        for token in ("", None, "<redacted>", "***", "token\r\nheader: injected", "x" * 8193):
             opener = Mock()
             with self.assertRaises(sync.SyncError):
                 sync.fetch_watchlist(token, opener=opener)

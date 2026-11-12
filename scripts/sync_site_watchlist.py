@@ -28,7 +28,7 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def fetch_watchlist(token, *, opener=None, sleep=time.sleep):
-    if not isinstance(token, str) or not token.strip() or len(token) > 8192 or any(c in token for c in "\r\n\x00"):
+    if not isinstance(token, str) or len(token.strip()) < 32 or len(token) > 8192 or any(c in token for c in "\r\n\x00"):
         raise SyncError("GitHub Actions Secret SITE_SERVICE_TOKEN을 등록하세요.")
     opener = opener or build_opener(NoRedirect())
     request = Request(SITE_URL, headers={
@@ -55,7 +55,9 @@ def fetch_watchlist(token, *, opener=None, sleep=time.sleep):
                 sleep(2 * (attempt + 1))
                 continue
             if exc.code in (401, 403):
-                raise SyncError("사이트 접근 인증 실패: SITE_SERVICE_TOKEN과 사이트 접근 설정을 확인하세요.") from None
+                challenge = exc.headers.get("cf-mitigated", "") == "challenge" if exc.headers else False
+                kind = "접속 확인 화면" if challenge else "접근 인증"
+                raise SyncError(f"사이트 {kind} 실패 (HTTP {exc.code}): SITE_SERVICE_TOKEN과 사이트 접근 설정을 확인하세요.") from None
             raise SyncError("사이트 목록 HTTP 요청 실패. 과거 목록으로 대신 발송하지 않았습니다.") from None
         except (URLError, OSError, socket.timeout):
             if attempt < 2:
