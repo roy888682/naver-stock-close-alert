@@ -17,6 +17,7 @@ REQUEST_FILE = "cloud-run-request.json"
 TEST_REQUEST_FILE = "cloud-test-request.json"
 SEOUL = timezone(timedelta(hours=9))
 ACTIONS = {"check", "check-only", "test-email", "test-digest", "lookup"}
+SCHEDULES = {"0 7 * * 2-6", "20 7 * * 2-6"}
 
 
 def validate_request(document, now=None):
@@ -41,7 +42,15 @@ def validate_request(document, now=None):
     return document
 
 
-def decide_action(event_name, inputs=None, changed_paths=(), request=None, now=None, test_request=None):
+def decide_action(event_name, inputs=None, changed_paths=(), request=None, now=None, test_request=None, scheduled_cron=None):
+    if event_name == "schedule":
+        if scheduled_cron not in SCHEDULES:
+            raise ValueError("등록된 GitHub 예약 일정이 아닙니다.")
+        now = now or datetime.now(timezone.utc)
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("실행 확인 시각에는 시간대 정보가 필요합니다.")
+        local = now.astimezone(SEOUL)
+        return "check" if local.weekday() in (1, 2, 3, 4, 5) and local.hour >= 7 else "skip"
     if event_name == "push":
         if TEST_REQUEST_FILE in changed_paths:
             if REQUEST_FILE in changed_paths:
@@ -88,6 +97,7 @@ def main(argv=None):
     parser.add_argument("--request", default=REQUEST_FILE)
     parser.add_argument("--test-request", default=TEST_REQUEST_FILE)
     parser.add_argument("--config", default="watchlist.json")
+    parser.add_argument("--select-only", action="store_true", help="최신 사이트 조회 전 실행 작업만 검증")
     parser.add_argument("--output", default=os.environ.get("GITHUB_OUTPUT"))
     args = parser.parse_args(argv)
     try:
@@ -97,8 +107,8 @@ def main(argv=None):
         paths = changed_paths(args.commit) if args.event_name == "push" else []
         request = read_json(args.request) if REQUEST_FILE in paths else None
         test_request = read_json(args.test_request) if TEST_REQUEST_FILE in paths else None
-        action = decide_action(args.event_name, event.get("inputs"), paths, request, test_request=test_request)
-        if action in ("check", "check-only", "test-digest"):
+        action = decide_action(args.event_name, event.get("inputs"), paths, request, test_request=test_request, scheduled_cron=event.get("schedule"))
+        if not args.select_only and action in ("check", "check-only", "test-digest"):
             # Match the existing runner's full schema before touching alert state.
             sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
             from stock_alert.cloud import load_config

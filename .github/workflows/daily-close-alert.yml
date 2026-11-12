@@ -1,41 +1,32 @@
 name: Daily close alert (07:00 KST)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - watchlist.json
-      - cloud-run-request.json
-      - cloud-test-request.json
-      - .github/workflows/daily-close-alert.yml
-      - stock_alert/cloud.py
-      - stock_alert/digest.py
-      - stock_alert/mailer.py
-      - scripts/action_state.py
-      - scripts/site_bridge.py
-  # The linked private Site task supplies fresh conditions Tue-Sat at 07:00 KST.
-  # Its atomic watchlist + dated-request commit triggers delivery below.
+  schedule:
+    - cron: '0 7 * * 2-6'
+      timezone: Asia/Seoul
+    # Retry missed runs; durable daily state prevents duplicate email.
+    - cron: '20 7 * * 2-6'
+      timezone: Asia/Seoul
   workflow_dispatch:
     inputs:
       action:
-        description: 'check=전체 목록 발송, check-only=메일 없이 확인, test-digest=전체 목록 테스트, test-email=연결 테스트, lookup=종목명 조회'
+        description: 'check=오늘 전체 목록 발송, check-only=미발송 확인, test-digest=전체 목록 테스트, test-email=SMTP 테스트, lookup=종목명 조회'
         type: choice
         options: [check-only, check, test-digest, test-email, lookup]
         default: check-only
       market:
-        description: 'lookup에 사용할 시장'
+        description: 'lookup 시장'
         type: choice
         options: [KR, US]
         default: KR
       ticker:
-        description: 'lookup에 사용할 티커 (예: 005930, AAPL)'
+        description: 'lookup 티커'
         type: string
         default: '005930'
 
 permissions:
   contents: write
 
-# Site requests, manual checks, and retries share the same durable state.
 concurrency:
   group: stock-close-alert-state
   cancel-in-progress: false
@@ -44,57 +35,61 @@ concurrency:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     env:
-      LOOKUP_MARKET: ${{ github.event.inputs.market || 'KR' }}
-      LOOKUP_TICKER: ${{ github.event.inputs.ticker || '005930' }}
+      LOOKUP_MARKET: ${{ inputs.market || 'KR' }}
+      LOOKUP_TICKER: ${{ inputs.ticker || '005930' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # A Site request and its conditions must be read from one snapshot.
-          ref: ${{ github.event_name == 'push' && github.sha || github.event.repository.default_branch }}
           fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
       - run: python -m pip install -r requirements.txt
-      - name: Validate Site request or manual action
+      - name: Select GitHub scheduled or manual action
         id: action
-        run: python scripts/site_bridge.py
+        run: python scripts/site_bridge.py --select-only
+      - name: Read the live private Site watchlist
+        if: contains(fromJSON('["check","check-only","test-digest"]'), steps.action.outputs.action)
+        env:
+          SITE_SERVICE_TOKEN: ${{ secrets.SITE_SERVICE_TOKEN }}
+        run: python scripts/sync_site_watchlist.py --output data/site-watchlist.json
       - name: Restore durable alert state
         id: restore
-        if: steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only' || steps.action.outputs.action == 'test-digest'
+        if: contains(fromJSON('["check","check-only","test-digest"]'), steps.action.outputs.action)
         run: python scripts/action_state.py restore
       - name: Check completed closes or run the selected utility
         id: monitor
         env:
           ALERT_ACTION: ${{ steps.action.outputs.action }}
-          # Existing installations may already use GMAIL_APP_PASSWORD.
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || secrets.GMAIL_APP_PASSWORD }}
         shell: bash
         run: |
           case "$ALERT_ACTION" in
-            check) python -m stock_alert.cloud --digest --persist-state ;;
-            check-only) python -m stock_alert.cloud --check-only ;;
-            test-digest) python -m stock_alert.cloud --test-digest --persist-state ;;
+            check) python -m stock_alert.cloud --config data/site-watchlist.json --digest --persist-state ;;
+            check-only) python -m stock_alert.cloud --config data/site-watchlist.json --check-only ;;
+            test-digest) python -m stock_alert.cloud --config data/site-watchlist.json --test-digest --persist-state ;;
             test-email) python -m stock_alert.cloud --test-email ;;
             lookup) python -m stock_alert.cloud --lookup "$LOOKUP_MARKET" "$LOOKUP_TICKER" ;;
-            *) echo "알 수 없는 실행 작업입니다."; exit 1 ;;
+            skip) echo '한국 시간 화~토 오전 7시 이후에만 정기 발송합니다.' ;;
+            *) echo '알 수 없는 실행 작업입니다.'; exit 1 ;;
           esac
       - name: Save state even after a partial failure
-        if: always() && steps.restore.outcome == 'success' && (steps.action.outputs.action == 'check' || steps.action.outputs.action == 'check-only' || steps.action.outputs.action == 'test-digest') && steps.monitor.outcome != 'skipped'
+        if: always() && steps.restore.outcome == 'success' && steps.monitor.outcome != 'skipped'
         run: python scripts/action_state.py save
       - name: Explain execution schedule
         if: always()
         shell: bash
         run: |
           {
-            echo '### 종가 알림'
-            echo '웹사이트에 연결된 작업이 매주 화요일~토요일 한국 시간 오전 7시에 최신 조건을 전달합니다. 실제 시작은 늦어질 수 있습니다.'
-            echo '목표 범위 일치 여부와 관계없이 전체 목록 메일을 한 통 보냅니다. 도달 종목을 먼저 표시하고 종목명과 상태를 빨간색으로 표시합니다.'
-            echo '발신: royhan88888@gmail.com / 수신: ykhan@dacpole.com'
-            echo '종목·목표가는 웹사이트에서 관리합니다. 발송 기록은 alert-state 브랜치에 보관합니다.'
-            echo '메일 발송에는 저장소 Secret SMTP_PASSWORD(또는 GMAIL_APP_PASSWORD)가 필요합니다.'
-            echo '세부 결과와 오류는 위 실행 단계의 로그를 확인하세요.'
+            echo '### 종가 알림 · GitHub 자체 예약'
+            echo '화~토 오전 7시 Asia/Seoul. 7시 20분에 누락을 재확인하며 같은 날짜 메일은 중복 발송하지 않습니다.'
+            echo 'GitHub가 비공개 사이트의 최신 종목 목록을 직접 읽습니다. 조회 실패 시 과거 목록으로 발송하지 않습니다.'
+            echo '발신 royhan88888@gmail.com / 수신 ykhan@dacpole.com'
+            echo '등록 종목은 목표 범위 일치 여부와 관계없이 한 표로 보냅니다. 도달 종목을 먼저, 빨간색으로 표시합니다.'
+            echo '종목 관리: https://close-watch-list.hansharedid.chatgpt.site/'
+            echo '필요한 Secret: SITE_SERVICE_TOKEN, 기존 SMTP_PASSWORD. 발송 기록: alert-state 브랜치.'
+            echo 'GitHub 예약은 대기열 사정에 따라 시작이 늦어질 수 있습니다.'
           } >> "$GITHUB_STEP_SUMMARY"
