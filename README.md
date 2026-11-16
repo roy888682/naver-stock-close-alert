@@ -151,11 +151,10 @@ Windows 작업 스케줄러에서 **기본 작업 만들기 → 로그온할 때
 - `data/smtp-credential.json`: 웹에서 저장한 앱 비밀번호입니다. Windows에서는 같은 PC의 같은 Windows 계정에서 복호화하는 DPAPI로 보호합니다. Linux·Docker에서는 소유자만 읽고 쓰는 권한(`600`)의 별도 파일로 저장합니다. Linux·Docker의 저장 파일은 암호화되지 않으므로 관리자나 루트 사용자는 읽을 수 있습니다.
 - `.env`: 기존 방식과의 호환을 위한 선택 설정입니다. 사용하지 않아도 됩니다. 사용한다면 저장소와 백업 공유 대상에서 제외합니다.
 - `.github/workflows/tests.yml`: GitHub에 올린 코드의 테스트 실행용입니다. 주가 감시나 이메일 발송 스케줄이 아닙니다.
-- `.github/workflows/daily-close-alert.yml`: 사이트 연결 작업이 화~토 한국 시간 오전 7시에 요청하는 전체 종목 메일 워크플로입니다. 별도 GitHub cron은 없습니다.
+- `.github/workflows/daily-close-alert.yml`: GitHub 자체 cron으로 화~토 한국 시간 오전 7시에 전체 종목 메일을 보내고 7시 20분에 누락을 재확인합니다.
 - `.github/workflows/manage-alerts.yml`: 웹 화면에서 등록·수정·일시정지·재개·삭제·목록 확인을 실행합니다.
-- `watchlist.json`: 웹 입력 화면이 내부적으로 저장하고 오전 7시 실행이 읽는 종목·가격 조건입니다. 직접 편집할 필요가 없으며 개발자용 예시는 `watchlist.example.json`에 있습니다.
-- `cloud-run-request.json`: 사이트 연결 작업의 당일 정기 요청입니다. 조건과 한 커밋으로 전달합니다.
-- `cloud-test-request.json`: 명시적으로 요청한 전체 목록 테스트용 당일 요청입니다. 정기 요청·코드 배포와 별도 커밋으로 전달합니다.
+- `watchlist.json`: 이전 방식의 종목 목록입니다. 현재 정기 메일은 사이트의 최신 목록을 직접 읽으며 이 파일로 대체하지 않습니다. 개발자용 예시는 `watchlist.example.json`에 있습니다.
+- `cloud-run-request.json`, `cloud-test-request.json`: 이전 사이트 연결 방식의 날짜 요청입니다. 현재 GitHub 예약 메일의 실행에 사용하지 않습니다.
 - `alert-state` 브랜치의 `alerts.db`: GitHub 실행 간 조회 상태와 발송 기록을 보관하며 실행 중에는 `data/alerts.db`로 복원합니다. 공개 저장소에서는 이 기록도 공개됩니다. 삭제하면 중복 방지 기록이 사라집니다.
 
 `.gitignore`는 `.env`, `data/`, 가상환경을 제외합니다. GitHub에 올리기 전에도 실제 비밀번호가 소스·스크린샷·로그에 포함되지 않았는지 확인하세요.

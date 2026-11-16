@@ -41,18 +41,18 @@ class ScheduleTests(unittest.TestCase):
         for now in (datetime(2026, 11, 11, 21, 59, tzinfo=timezone.utc),
                     datetime(2026, 11, 14, 22, tzinfo=timezone.utc),
                     datetime(2026, 11, 15, 22, tzinfo=timezone.utc)):
-            self.assertEqual(bridge.decide_action("schedule", now=now, scheduled_cron="0 7 * * 2-6"), "skip")
+            self.assertEqual(bridge.decide_action("schedule", now=now, scheduled_cron="0 22 * * 1-5"), "skip")
 
     def test_tuesday_and_saturday_are_both_report_days(self):
         for day in (9, 13):
             now = datetime(2026, 11, day, 22, tzinfo=timezone.utc)
-            self.assertEqual(bridge.decide_action("schedule", now=now, scheduled_cron="20 7 * * 2-6"), "check")
+            self.assertEqual(bridge.decide_action("schedule", now=now, scheduled_cron="20 22 * * 1-5"), "check")
 
     def test_unknown_schedule_and_naive_time_rejected(self):
         with self.assertRaises(ValueError):
             bridge.decide_action("schedule", scheduled_cron="* * * * *")
         with self.assertRaises(ValueError):
-            bridge.decide_action("schedule", now=datetime(2026, 11, 12), scheduled_cron="0 7 * * 2-6")
+            bridge.decide_action("schedule", now=datetime(2026, 11, 12), scheduled_cron="0 22 * * 1-5")
 
     def test_select_only_does_not_read_a_historical_config(self):
         with tempfile.TemporaryDirectory() as temporary:

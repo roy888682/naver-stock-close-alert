@@ -1,7 +1,7 @@
-"""Validate a private Site's daily request before enabling SMTP delivery.
+"""Select a GitHub schedule/manual action before reading the live Site.
 
-Ordinary code/configuration pushes remain previews. A send needs a changed
-request file for this exact Site and today's Korean date in the same commit.
+Legacy dated push requests remain validated for compatibility, but the live
+workflow only uses GitHub's own schedule and explicit manual actions.
 """
 import argparse
 import json
@@ -17,7 +17,8 @@ REQUEST_FILE = "cloud-run-request.json"
 TEST_REQUEST_FILE = "cloud-test-request.json"
 SEOUL = timezone(timedelta(hours=9))
 ACTIONS = {"check", "check-only", "test-email", "test-digest", "lookup"}
-SCHEDULES = {"0 7 * * 2-6", "20 7 * * 2-6"}
+# UTC Monday-Friday evenings are Tuesday-Saturday mornings in Korea.
+SCHEDULES = {"0 22 * * 1-5", "20 22 * * 1-5"}
 
 
 def validate_request(document, now=None):

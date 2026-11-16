@@ -2,11 +2,10 @@ name: Daily close alert (07:00 KST)
 
 on:
   schedule:
-    - cron: '0 7 * * 2-6'
-      timezone: Asia/Seoul
+    # UTC Mon-Fri 22:00 = Asia/Seoul Tue-Sat 07:00.
+    - cron: '0 22 * * 1-5'
     # Retry missed runs; durable daily state prevents duplicate email.
-    - cron: '20 7 * * 2-6'
-      timezone: Asia/Seoul
+    - cron: '20 22 * * 1-5'
   workflow_dispatch:
     inputs:
       action:
